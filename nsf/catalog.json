@@ -1,6 +1,17 @@
 {
-  "updatedAt": "2026-06-02T11:48:24.806939+00:00",
+  "updatedAt": "2026-06-02T11:56:54.771481+00:00",
   "items": [
+    {
+      "filename": "megaman3.nsf",
+      "path": "nsf/megaman3.nsf",
+      "title": "Mega Man III",
+      "artist": "Yasuaki Fujita",
+      "songs": 57,
+      "startSong": 1,
+      "sourceUrl": "https://www.zophar.net/music/nintendo-nes-nsf/mega-man-3",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/mega-man-3/Mega%20Man%203%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-02T11:56:54.771481+00:00"
+    },
     {
       "filename": "smb3.nsf",
       "path": "nsf/smb3.nsf",
