@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-02T18:58:05.823948+00:00",
+  "updatedAt": "2026-06-02T18:58:38.595984+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -77,6 +77,17 @@
       "sourceUrl": "https://www.zophar.net/music/nintendo-nes-nsf/mega-man-3",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/mega-man-3/Mega%20Man%203%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T11:56:54.771481+00:00"
+    },
+    {
+      "filename": "metroid.nsf",
+      "path": "nsf/metroid.nsf",
+      "title": "Metroid",
+      "artist": "Hirokazu \"Hip\" Tanaka",
+      "songs": 12,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/metroid/Metroid%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/metroid/Metroid%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-02T18:58:38.595984+00:00"
     },
     {
       "filename": "ninjagaiden1.nsf",
