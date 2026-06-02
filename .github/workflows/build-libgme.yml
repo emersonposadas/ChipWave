@@ -1,4 +1,4 @@
-  name: Build libgme for browser
+name: Build libgme for browser
 
 on:
   workflow_dispatch:
