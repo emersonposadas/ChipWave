@@ -18,6 +18,7 @@ const songCountEl = document.getElementById("songCount");
 const muteModeEl = document.getElementById("muteMode");
 const catalogSelect = document.getElementById("catalogSelect");
 const loadCatalogBtn = document.getElementById("loadCatalogBtn");
+const randomCatalogBtn = document.getElementById("randomCatalogBtn");
 const refreshCatalogBtn = document.getElementById("refreshCatalogBtn");
 const unmuteAllBtn = document.getElementById("unmuteAllBtn");
 const waveCyclesSelect = document.getElementById("waveCycles");
@@ -69,6 +70,7 @@ let waveCyclesToShow = Number((waveCyclesSelect && waveCyclesSelect.value) || 3)
 let waveStaticEnabled = Boolean(waveStaticToggle && waveStaticToggle.checked);
 const channelVisualState = CHANNELS.map(() => ({ frequency: 0, amplitude: 0, phase: 0, lastFrameTime: 0 }));
 let initialRandomAutoplayDone = false;
+let catalogItems = [];
 
 let gmeRuntimeReadyPromise = null;
 
@@ -194,6 +196,7 @@ async function loadCatalog() {
 
     const catalog = await response.json();
     const items = Array.isArray(catalog.items) ? catalog.items : [];
+    catalogItems = items;
 
     catalogSelect.innerHTML = "";
 
@@ -209,7 +212,8 @@ async function loadCatalog() {
       catalogSelect.appendChild(option);
     }
 
-    setHelp(`Catálogo cargado: ${items.length} archivo(s).`, "ok");
+    if (randomCatalogBtn) randomCatalogBtn.disabled = false;
+    setHelp(`${items.length} juego(s) listos.`, "ok");
     if (!initialRandomAutoplayDone) {
       initialRandomAutoplayDone = true;
       await loadRandomCatalogTrack(items);
@@ -218,7 +222,9 @@ async function loadCatalog() {
     return items;
   } catch (error) {
     console.warn(error);
+    catalogItems = [];
     catalogSelect.innerHTML = '<option value="">No hay catálogo disponible</option>';
+    if (randomCatalogBtn) randomCatalogBtn.disabled = true;
     setHelp("No se pudo cargar nsf/catalog.json. Ejecuta el workflow de importación o sube archivos manualmente.", "error");
     return [];
   }
@@ -233,13 +239,27 @@ async function loadFromCatalog() {
   await fetchAndLoad(path);
 }
 
-async function loadRandomCatalogTrack(items) {
+async function loadRandomCatalogTrack(items = catalogItems, options = {}) {
   const playableItems = items.filter(item => item && item.path);
-  if (!playableItems.length) return;
+  if (!playableItems.length) {
+    setStatus("Sin catálogo", "error");
+    setHelp("No hay juegos disponibles para Random.", "error");
+    return false;
+  }
 
-  const item = playableItems[Math.floor(Math.random() * playableItems.length)];
+  const currentPath = catalogSelect.value;
+  const candidates = playableItems.length > 1
+    ? playableItems.filter(item => item.path !== currentPath)
+    : playableItems;
+  const item = candidates[Math.floor(Math.random() * candidates.length)];
+
   catalogSelect.value = item.path;
-  await fetchAndLoad(item.path, { randomTrack: true, requiresUserPlay: true });
+  return fetchAndLoad(item.path, {
+    randomTrack: true,
+    requiresUserPlay: !options.autoplay,
+    autoplay: Boolean(options.autoplay),
+    randomLabel: true
+  });
 }
 
 function updateMetadata() {
@@ -285,13 +305,13 @@ async function fetchAndLoad(path, options = {}) {
     }
 
     if (options.requiresUserPlay) {
-      setHelp(`Demo cargada: ${currentName}, Track ${currentTrack + 1}. En iOS toca Play para activar el audio.`, "ok");
+      setHelp(`Listo: ${currentName}, Track ${currentTrack + 1}. Toca Play.`, "ok");
     }
 
     if (options.autoplay) {
       await play();
       if (isPlaying) {
-        setHelp(`Reproduciendo selección aleatoria: ${currentName}, Track ${currentTrack + 1}.`, "ok");
+        setHelp(`${options.randomLabel ? "Random" : "Reproduciendo"}: ${currentName}, Track ${currentTrack + 1}.`, "ok");
       }
     }
 
@@ -1253,6 +1273,11 @@ function findPeak(freqData, sampleRate, fftSize) {
 
 refreshCatalogBtn.addEventListener("click", loadCatalog);
 loadCatalogBtn.addEventListener("click", loadFromCatalog);
+if (randomCatalogBtn) {
+  randomCatalogBtn.addEventListener("click", () => {
+    loadRandomCatalogTrack(catalogItems, { autoplay: Boolean(audioCtx) || isPlaying });
+  });
+}
 if (loadUrlBtn) loadUrlBtn.addEventListener("click", loadFromUrl);
 fileInput.addEventListener("change", loadFromFile);
 playBtn.addEventListener("click", play);

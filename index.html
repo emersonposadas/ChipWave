@@ -10,9 +10,9 @@
   <main class="app shell">
     <header class="topbar" aria-label="Estado de la aplicación">
       <div class="brandBlock">
-        <p class="eyebrow">NSF browser visualizer</p>
+        <p class="eyebrow">NSF visualizer</p>
         <h1>ChipWave</h1>
-        <p class="subtitle">Carga una canción demo automáticamente, reproduce tracks y analiza la forma de onda por canal con controles de visualización más claros.</p>
+        <p class="subtitle">Escucha música NES y mira sus canales en vivo.</p>
       </div>
 
       <div class="statusCard" role="status" aria-live="polite">
@@ -29,21 +29,23 @@
         <section class="panel primaryPanel">
           <div class="panelHeader">
             <div>
-              <p class="sectionKicker">Fuente</p>
-              <h2>Fuente NSF</h2>
+              <p class="sectionKicker">Juego</p>
+              <h2>Elige música</h2>
             </div>
           </div>
 
-          <label class="fieldLabel" for="catalogSelect">Catálogo del repo</label>
+          <button id="randomCatalogBtn" class="randomBtn fullBtn" type="button" disabled>Random</button>
+
+          <label class="fieldLabel" for="catalogSelect">Catálogo</label>
           <div class="inlineGroup">
             <select id="catalogSelect">
               <option value="">No hay archivos cargados</option>
             </select>
             <button id="refreshCatalogBtn" class="secondaryBtn" type="button">Recargar</button>
           </div>
-          <button id="loadCatalogBtn" class="fullBtn" type="button">Cambiar a seleccionado</button>
+          <button id="loadCatalogBtn" class="fullBtn secondaryBtn" type="button">Cargar seleccionado</button>
 
-          <label class="fileLabel fullBtn">
+          <label class="fileLabel fullBtn secondaryBtn">
             Subir .nsf
             <input id="fileInput" type="file" accept=".nsf,.nsfe,application/octet-stream" />
           </label>
@@ -87,14 +89,12 @@
             <option value="5">Cerca</option>
             <option value="10">Detalle</option>
           </select>
-          <p class="microcopy">Menos zoom muestra más tiempo; más zoom acerca la onda.</p>
-
           <label class="switch waveStatic" for="waveStatic">
             <input id="waveStatic" type="checkbox" />
             <span class="switchTrack" aria-hidden="true"></span>
             <span>
               <strong>Onda estática</strong>
-              <small>Congela la forma solo cuando necesites inspeccionarla.</small>
+              <small>Congela la forma.</small>
             </span>
           </label>
 
@@ -125,7 +125,7 @@
             <h2>Canales NSF</h2>
           </div>
           <p class="hint" id="helpText">
-            Se carga una canción demo automáticamente. Los tracks quedan disponibles al iniciar; usa Play solo para comenzar la reproducción.
+            Toca Random para cambiar de juego y track.
           </p>
         </section>
 
