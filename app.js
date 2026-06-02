@@ -791,7 +791,7 @@ window.addEventListener("error", event => {
 
   if (message.includes("Module") || filename.includes("libgme")) {
     setStatus("Error cargando emulador", "error");
-    setHelp("No se cargó vendor/libgme.js. Ejecuta el workflow Build libgme for browser y confirma que vendor/libgme.js/vendor/libgme.wasm existan.", "error");
+    setHelp("No se cargo vendor/libgme.js. Ejecuta el workflow Build libgme for browser y confirma que vendor/libgme.js/vendor/libgme.wasm existan.", "error");
   }
 });
 
