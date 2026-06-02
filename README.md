@@ -55,3 +55,23 @@ El procesamiento ocurre en el navegador:
 Esta versión reproduce NSF real, pero si el core JS no expone buffers separados por canal, la visualización de canales se estima por bandas sobre la mezcla NSF.
 
 Para canales 100% reales se necesita una build propia del emulador que exponga buffers por voz o mute/solo por voz.
+
+
+## Workflow v2
+
+El workflow acepta:
+
+- URL directa `.nsf`
+- URL directa `.nsfe`
+- URL directa `.zip` que contenga un `.nsf`
+- página de Zophar con botón **Download original music files**
+
+Ejemplo recomendado para probar:
+
+```text
+https://www.zophar.net/music/nintendo-nes-nsf/super-mario-bros-3
+```
+
+También puede usarse el ZIP de Zophar si copias el enlace directo desde su página.
+
+El workflow descarga el archivo, si es ZIP extrae el primer `.nsf`, valida que el header sea `NESM\x1A`, lo guarda en `nsf/` y actualiza `nsf/catalog.json`.
