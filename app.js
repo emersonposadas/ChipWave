@@ -1,3 +1,4 @@
+console.log("ChipWave app build v9 loaded");
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -791,11 +792,11 @@ window.addEventListener("error", event => {
 
   if (message.includes("Module") || filename.includes("libgme")) {
     setStatus("Error cargando emulador", "error");
-    setHelp("No se cargo vendor/libgme.js. Ejecuta el workflow Build libgme for browser y confirma que vendor/libgme.js/vendor/libgme.wasm existan.", "error");
+    setHelp("No se cargó vendor/libgme.js. Ejecuta el workflow Build libgme for browser y confirma que vendor/libgme.js/vendor/libgme.wasm existan.", "error");
   }
 });
 
-setMuteMode("libgme pendiente hasta Play");
+setMuteMode("libgme v9 pendiente hasta Play");
 updateMuteUIOnly();
 loadCatalog();
 
