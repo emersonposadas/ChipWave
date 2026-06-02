@@ -3,35 +3,73 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ChipWave NSF Visualizer</title>
+  <title>ChipWave NSF Catalog Visualizer</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div>
-        <p class="eyebrow">GitHub Pages / NSF / Web Audio API</p>
+        <p class="eyebrow">GitHub Pages / NSF / GitHub Actions</p>
         <h1>ChipWave NSF Visualizer</h1>
-        <p class="subtitle">Carga una URL directa a un archivo .nsf o sube un NSF local para reproducirlo y visualizar canales NES.</p>
+        <p class="subtitle">
+          Usa archivos NSF importados por workflow, URLs directas o archivos locales. La reproducción y visualización se procesan en tu navegador.
+        </p>
       </div>
-      <div class="meter"><span id="statusDot"></span><strong id="statusText">Listo</strong></div>
+      <div class="meter">
+        <span id="statusDot"></span>
+        <strong id="statusText">Listo</strong>
+      </div>
     </header>
 
     <section class="panel">
-      <label for="nsfUrl">URL .nsf</label>
-      <textarea id="nsfUrl" spellcheck="false" placeholder="Ejemplo: https://example.com/music/mega-man-3.nsf"></textarea>
+      <h2>Catálogo NSF del repo</h2>
+      <p class="hint">
+        Estos archivos viven dentro de <code>nsf/</code>. El workflow los descarga y actualiza <code>nsf/catalog.json</code>.
+      </p>
 
       <div class="controls">
-        <button id="loadUrlBtn">Cargar NSF desde URL</button>
-        <label class="fileLabel">Subir .nsf<input id="fileInput" type="file" accept=".nsf,.nsfe,application/octet-stream" /></label>
+        <button id="refreshCatalogBtn">Recargar catálogo</button>
+        <label class="trackLabel">
+          Archivo
+          <select id="catalogSelect">
+            <option value="">No hay archivos cargados</option>
+          </select>
+        </label>
+        <button id="loadCatalogBtn">Cargar seleccionado</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Cargar manualmente</h2>
+
+      <label for="nsfUrl">URL o ruta .nsf/.nsfe</label>
+      <textarea id="nsfUrl" spellcheck="false" placeholder="Ejemplos:
+nsf/demo.nsf
+https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
+
+      <div class="controls">
+        <button id="loadUrlBtn">Cargar desde URL/ruta</button>
+        <label class="fileLabel">
+          Subir .nsf
+          <input id="fileInput" type="file" accept=".nsf,.nsfe,application/octet-stream" />
+        </label>
       </div>
 
       <div class="controls transport">
         <button id="playBtn" disabled>Play</button>
         <button id="pauseBtn" disabled>Pausa</button>
         <button id="stopBtn" disabled>Stop</button>
-        <label class="trackLabel">Track <select id="trackSelect" disabled></select></label>
-        <label class="volume">Volumen <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" /></label>
+
+        <label class="trackLabel">
+          Track
+          <select id="trackSelect" disabled></select>
+        </label>
+
+        <label class="volume">
+          Volumen
+          <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" />
+        </label>
       </div>
 
       <div class="meta">
@@ -41,20 +79,50 @@
         <p><strong>Canciones:</strong> <span id="songCount">—</span></p>
       </div>
 
-      <p class="hint" id="helpText">La URL debe apuntar directamente a un archivo .nsf y permitir CORS. Si falla, sube el archivo localmente o aloja el NSF en el mismo repo.</p>
+      <p class="hint" id="helpText">
+        Para URLs externas, CORS puede bloquear la descarga. Para evitarlo, importa el archivo con GitHub Actions y úsalo desde el catálogo.
+      </p>
     </section>
 
     <section class="visualizers">
-      <article class="channel"><div class="channelHead"><h2>Pulse 1</h2><span>Canal cuadrado 1</span></div><canvas id="ch0" width="1200" height="260"></canvas><p id="readout0">—</p></article>
-      <article class="channel"><div class="channelHead"><h2>Pulse 2</h2><span>Canal cuadrado 2</span></div><canvas id="ch1" width="1200" height="260"></canvas><p id="readout1">—</p></article>
-      <article class="channel"><div class="channelHead"><h2>Triangle</h2><span>Bajo / melodía triangular</span></div><canvas id="ch2" width="1200" height="260"></canvas><p id="readout2">—</p></article>
-      <article class="channel"><div class="channelHead"><h2>Noise</h2><span>Percusión / ruido</span></div><canvas id="ch3" width="1200" height="260"></canvas><p id="readout3">—</p></article>
-      <article class="channel wide"><div class="channelHead"><h2>DPCM / Mix</h2><span>Samples o mezcla final</span></div><canvas id="ch4" width="1200" height="260"></canvas><p id="readout4">—</p></article>
+      <article class="channel">
+        <div class="channelHead"><h2>Pulse 1</h2><span>Canal cuadrado 1</span></div>
+        <canvas id="ch0" width="1200" height="260"></canvas>
+        <p id="readout0">—</p>
+      </article>
+
+      <article class="channel">
+        <div class="channelHead"><h2>Pulse 2</h2><span>Canal cuadrado 2</span></div>
+        <canvas id="ch1" width="1200" height="260"></canvas>
+        <p id="readout1">—</p>
+      </article>
+
+      <article class="channel">
+        <div class="channelHead"><h2>Triangle</h2><span>Bajo / melodía triangular</span></div>
+        <canvas id="ch2" width="1200" height="260"></canvas>
+        <p id="readout2">—</p>
+      </article>
+
+      <article class="channel">
+        <div class="channelHead"><h2>Noise</h2><span>Percusión / ruido</span></div>
+        <canvas id="ch3" width="1200" height="260"></canvas>
+        <p id="readout3">—</p>
+      </article>
+
+      <article class="channel wide">
+        <div class="channelHead"><h2>DPCM / Mix</h2><span>Samples o mezcla final</span></div>
+        <canvas id="ch4" width="1200" height="260"></canvas>
+        <p id="readout4">—</p>
+      </article>
     </section>
 
     <section class="panel notes">
-      <h2>Notas técnicas</h2>
-      <p>Esta versión reproduce NSF real usando Game_Music_Emu vía JavaScript. Si el core no expone aislamiento por voz, los canales se visualizan como estimaciones por bandas sobre la mezcla NSF.</p>
+      <h2>Dónde se procesa el NSF</h2>
+      <p>
+        GitHub Actions solo descarga el archivo y lo guarda en <code>nsf/</code>. El análisis ocurre en el navegador:
+        la app hace <code>fetch()</code> del NSF, lee los bytes, parsea el header, pasa el archivo al emulador
+        <code>Game_Music_Emu</code> compilado a JavaScript y renderiza audio con Web Audio API.
+      </p>
     </section>
   </main>
 

@@ -1,56 +1,57 @@
-# ChipWave NSF Visualizer
+# ChipWave NSF Catalog Visualizer
 
-GitHub Pages app para cargar un archivo `.nsf`/`.nsfe`, reproducirlo en el navegador y visualizar canales NES.
+App estática para GitHub Pages con workflow para importar archivos NSF.
 
-## Qué hace
+## Flujo
 
-- Acepta URL directa a `.nsf` o `.nsfe`.
-- Acepta archivo local `.nsf`/`.nsfe`.
-- Lee metadata básica del header NSF.
-- Permite elegir track/subsong.
-- Reproduce el NSF con `game-music-emu` vía JavaScript.
-- Muestra visualizadores para:
-  - Pulse 1
-  - Pulse 2
-  - Triangle
-  - Noise
-  - DPCM/Mix
+```text
+URL externa .nsf
+↓
+GitHub Actions descarga el archivo
+↓
+Lo guarda en nsf/
+↓
+Actualiza nsf/catalog.json
+↓
+GitHub Pages muestra el catálogo
+↓
+El navegador descarga el NSF desde el mismo repo
+↓
+El navegador reproduce/visualiza con Game_Music_Emu + Web Audio API
+```
 
-## Limitación técnica
+## Dónde se procesa el NSF
 
-Esta versión reproduce el NSF real, pero si el core no expone buffers separados por canal, muestra una visualización estimada por bandas sobre la mezcla NSF.
+El workflow **no analiza** el NSF. Solo lo descarga y actualiza el catálogo.
 
-Para canales 100% reales se necesita un core compilado con soporte de mute/solo por voz o buffers por canal.
+El procesamiento ocurre en el navegador:
 
-## CORS
+1. La app hace `fetch("nsf/archivo.nsf")`.
+2. Convierte la respuesta a `ArrayBuffer`.
+3. Lee el header NSF para mostrar metadata.
+4. Pasa los bytes a `Game_Music_Emu`, cargado desde `libgme.js`.
+5. El emulador genera audio PCM.
+6. Web Audio API reproduce el audio y alimenta los visualizadores.
 
-Para usar una URL externa, el servidor del NSF debe permitir CORS.
+## Importar un NSF con GitHub Actions
 
-Si falla:
-
-- sube el `.nsf` desde tu equipo;
-- aloja el NSF en el mismo repo;
-- usa un proxy/backend;
-- o usa GitHub raw/jsDelivr si el archivo está en un repo público.
+1. Ve a **Actions**.
+2. Selecciona **Import NSF**.
+3. Pulsa **Run workflow**.
+4. Pega una URL directa a `.nsf`.
+5. Opcionalmente define un nombre como `mega-man-3.nsf`.
+6. Ejecuta el workflow.
+7. Cuando termine, GitHub Pages mostrará el archivo en el catálogo.
 
 ## Publicar en GitHub Pages
 
-1. Sube estos archivos al repo:
-   - `index.html`
-   - `styles.css`
-   - `app.js`
-   - `.nojekyll`
-   - `README.md`
+1. Sube estos archivos al repo.
 2. Ve a **Settings → Pages**.
 3. Selecciona **Deploy from a branch**.
 4. Elige `main` y `/root`.
 
-## Dependencia externa
+## Limitación técnica
 
-`index.html` carga:
+Esta versión reproduce NSF real, pero si el core JS no expone buffers separados por canal, la visualización de canales se estima por bandas sobre la mezcla NSF.
 
-```html
-<script src="https://cdn.jsdelivr.net/gh/okaybenji/nsf-player@master/libgme/libgme.js"></script>
-```
-
-Para evitar depender del CDN, descarga ese archivo dentro del repo y cambia el script a una ruta local.
+Para canales 100% reales se necesita una build propia del emulador que exponga buffers por voz o mute/solo por voz.
