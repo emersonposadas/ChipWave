@@ -50,6 +50,39 @@ let currentTrack = 0;
 
 const mutedChannels = [false, false, false, false, false];
 
+let gmeRuntimeReadyPromise = null;
+
+function waitForGmeRuntime() {
+  if (!window.Module) {
+    return Promise.reject(new Error("No se encontró Module. Revisa que vendor/libgme.js exista y cargue correctamente."));
+  }
+
+  if (Module.calledRun || Module.runtimeInitialized) {
+    return Promise.resolve();
+  }
+
+  if (!gmeRuntimeReadyPromise) {
+    gmeRuntimeReadyPromise = new Promise((resolve, reject) => {
+      const previous = Module.onRuntimeInitialized;
+
+      Module.onRuntimeInitialized = () => {
+        Module.runtimeInitialized = true;
+        if (typeof previous === "function") previous();
+        resolve();
+      };
+
+      setTimeout(() => {
+        if (!(Module.calledRun || Module.runtimeInitialized)) {
+          reject(new Error("vendor/libgme.wasm aún no terminó de cargar. Revisa la consola y que vendor/libgme.wasm exista."));
+        }
+      }, 10000);
+    });
+  }
+
+  return gmeRuntimeReadyPromise;
+}
+
+
 function setStatus(text, mode = "") {
   statusText.textContent = text;
   statusDot.className = mode;
@@ -231,12 +264,15 @@ async function loadNsfBytes(bytes, name) {
 }
 
 async function ensureAudio() {
+  await waitForGmeRuntime();
+
   if (!window.Module || !Module.ccall || !Module._malloc || !Module._free) {
-    throw new Error("No se cargó vendor/libgme.js. Ejecuta el workflow Build libgme for browser o revisa la ruta vendor/libgme.js.");
+    throw new Error("No se cargó vendor/libgme.js correctamente. Ejecuta el workflow Build libgme for browser o revisa vendor/libgme.js/vendor/libgme.wasm.");
   }
 
   if (!audioCtx) {
     audioCtx = new AudioContext();
+
     masterGain = audioCtx.createGain();
     masterGain.gain.value = Number(volume.value);
 
@@ -244,6 +280,16 @@ async function ensureAudio() {
     processor.onaudioprocess = processAudio;
 
     analyserSource = audioCtx.createGain();
+
+    /*
+      Important:
+      The generated GME audio must go directly to the master output.
+      The analyzer/filter branch is only for visualization. This avoids silence
+      caused by routing the only audible output through analysis filters/gains.
+    */
+    processor.connect(masterGain);
+    processor.connect(analyserSource);
+    masterGain.connect(audioCtx.destination);
 
     [450, 900, 260, 1800, 1000].forEach((freq, index) => {
       const filter = audioCtx.createBiquadFilter();
@@ -254,6 +300,7 @@ async function ensureAudio() {
       filter.frequency.value = freq;
       filter.Q.value = 0.9;
 
+      // Kept for UI/fallback state, but not used as the main audible path.
       gain.gain.value = mutedChannels[index] ? 0 : 1;
 
       analyser.fftSize = 2048;
@@ -261,8 +308,6 @@ async function ensureAudio() {
 
       analyserSource.connect(filter);
       filter.connect(analyser);
-      filter.connect(gain);
-      gain.connect(masterGain);
 
       channelGains.push(gain);
       analyzers.push({
@@ -271,9 +316,6 @@ async function ensureAudio() {
         freq: new Uint8Array(analyser.frequencyBinCount)
       });
     });
-
-    processor.connect(analyserSource);
-    masterGain.connect(audioCtx.destination);
   }
 
   if (audioCtx.state === "suspended") {
@@ -524,8 +566,8 @@ function toggleMute(index) {
 
   setHelp(
     mutedList.length
-      ? `Mute aproximado activo: ${mutedList.join(", ")}. gme_mute_voice no está disponible.`
-      : "Todos los canales aproximados están activos.",
+      ? `Mute visual aproximado activo: ${mutedList.join(", ")}. gme_mute_voice no está disponible para silenciar audio real.`
+      : "Todos los canales están activos.",
     "ok"
   );
 }
@@ -549,7 +591,7 @@ function unmuteAll() {
   }
 
   applyApproxMuteState();
-  setHelp("Todos los canales aproximados están activos.", "ok");
+  setHelp("Todos los canales están activos.", "ok");
 }
 
 function drawLoop() {
