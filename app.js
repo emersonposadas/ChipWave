@@ -37,6 +37,7 @@ const CHANNELS = [
 ];
 
 const RANDOM_TRACK_LIMIT = 15;
+const MIX_SCOPE_VISUAL_GAIN = 2.8;
 
 const VISUAL_TUNING = {
   pulse: { phaseDivisor: 260, minPhaseRate: 0.04, maxPhaseRate: 2.2, lineWidth: 2.5, glow: 8 },
@@ -210,6 +211,11 @@ async function loadCatalog() {
       return;
     }
 
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Selecciona un juego";
+    catalogSelect.appendChild(placeholder);
+
     for (const item of items) {
       const option = document.createElement("option");
       option.value = item.path;
@@ -218,11 +224,8 @@ async function loadCatalog() {
     }
 
     if (randomCatalogBtn) randomCatalogBtn.disabled = false;
-    setHelp(`${items.length} juego(s) listos.`, "ok");
-    if (!initialRandomAutoplayDone) {
-      initialRandomAutoplayDone = true;
-      await loadRandomCatalogTrack(items);
-    }
+    setStatus("Catálogo listo", "");
+    setHelp(`${items.length} juego(s) listos. Elige uno para reproducir.`, "ok");
 
     return items;
   } catch (error) {
@@ -235,13 +238,18 @@ async function loadCatalog() {
   }
 }
 
-async function loadFromCatalog() {
+async function loadFromCatalog(options = {}) {
   const path = catalogSelect.value;
   if (!path) {
     setStatus("No hay NSF seleccionado", "error");
     return;
   }
-  await fetchAndLoad(path);
+
+  await fetchAndLoad(path, {
+    autoplay: options.autoplay !== false,
+    trackIndex: 0,
+    catalogLabel: true
+  });
 }
 
 async function loadRandomCatalogTrack(items = catalogItems, options = {}) {
@@ -298,6 +306,10 @@ async function fetchAndLoad(path, options = {}) {
   setHelp("Descargando archivo NSF.", "");
 
   try {
+    if (options.autoplay) {
+      await ensureAudio();
+    }
+
     const response = await fetch(path);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -305,7 +317,9 @@ async function fetchAndLoad(path, options = {}) {
     const loaded = await loadNsfBytes(new Uint8Array(buffer), path.split("/").pop() || path);
     if (!loaded) return false;
 
-    if (options.randomTrack) {
+    if (Number.isInteger(options.trackIndex)) {
+      setCurrentTrack(options.trackIndex);
+    } else if (options.randomTrack) {
       selectRandomTrack();
     }
 
@@ -316,7 +330,8 @@ async function fetchAndLoad(path, options = {}) {
     if (options.autoplay) {
       await play();
       if (isPlaying) {
-        setHelp(`${options.randomLabel ? "Random" : "Reproduciendo"}: ${currentName}, Track ${currentTrack + 1}.`, "ok");
+        const prefix = options.randomLabel ? "Random" : options.catalogLabel ? "Catálogo" : "Reproduciendo";
+        setHelp(`${prefix}: ${currentName}, Track ${currentTrack + 1}.`, "ok");
       }
     }
 
@@ -383,8 +398,15 @@ function selectRandomTrack() {
   const playableCount = Math.max(1, Math.min(count, RANDOM_TRACK_LIMIT));
   const randomTrack = Math.floor(Math.random() * playableCount);
 
-  currentTrack = randomTrack;
-  trackSelect.value = String(randomTrack);
+  setCurrentTrack(randomTrack);
+}
+
+function setCurrentTrack(trackIndex) {
+  const count = trackSelect.options.length || (currentInfo && currentInfo.songs) || 1;
+  const boundedTrack = Math.max(0, Math.min(Math.max(0, count - 1), Number(trackIndex) || 0));
+
+  currentTrack = boundedTrack;
+  trackSelect.value = String(boundedTrack);
 }
 
 async function ensureAudio() {
@@ -727,7 +749,8 @@ function processAudio(event) {
       if (abs > peak) peak = abs;
 
       if (mixScope && mixScope.time) {
-        mixScope.time[i] = Math.max(0, Math.min(255, Math.round(128 + mono * 128)));
+        const visualMono = Math.max(-1, Math.min(1, mono * MIX_SCOPE_VISUAL_GAIN));
+        mixScope.time[i] = Math.max(0, Math.min(255, Math.round(128 + visualMono * 128)));
       }
     }
 
@@ -735,7 +758,7 @@ function processAudio(event) {
     if (mixScope && mixScope.history) {
       mixScope.history.copyWithin(0, frameSize);
       mixScope.history.set(mixScope.time, mixScope.history.length - frameSize);
-      mixScope.lastPeak = peak;
+      mixScope.lastPeak = Math.min(1, peak * MIX_SCOPE_VISUAL_GAIN);
     }
 
     renderChannelScopes();
@@ -1220,12 +1243,9 @@ function getDisplayWaveSample(type, normalizedX, cycles, phase, timeData, startS
   }
 
   const real = getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples);
-  const body =
-    Math.sin((normalizedX * cycles + phase * 0.55) * Math.PI * 2) * 0.2 +
-    Math.sin((normalizedX * cycles * 2.7 - phase * 0.35) * Math.PI * 2) * 0.08;
-  const lift = Math.max(0.08, Math.min(0.42, amplitude * 0.75));
+  const mixBoost = Math.max(1.45, Math.min(3.1, 1.25 + amplitude * 2.2));
 
-  return Math.max(-1, Math.min(1, real * 1.28 + body * lift * (muted ? 0.75 : 1)));
+  return Math.max(-1, Math.min(1, real * mixBoost * (muted ? 0.25 : 1)));
 }
 
 function blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, amount) {
@@ -1328,22 +1348,23 @@ function findPeak(freqData, sampleRate, fftSize) {
   };
 }
 
-refreshCatalogBtn.addEventListener("click", loadCatalog);
-loadCatalogBtn.addEventListener("click", loadFromCatalog);
+if (refreshCatalogBtn) refreshCatalogBtn.addEventListener("click", loadCatalog);
+if (loadCatalogBtn) loadCatalogBtn.addEventListener("click", () => loadFromCatalog({ autoplay: true }));
+catalogSelect.addEventListener("change", () => loadFromCatalog({ autoplay: true }));
 if (randomCatalogBtn) {
   randomCatalogBtn.addEventListener("click", () => {
-    loadRandomCatalogTrack(catalogItems, { autoplay: Boolean(audioCtx) || isPlaying });
+    loadRandomCatalogTrack(catalogItems, { autoplay: true });
   });
 }
 if (loadUrlBtn) loadUrlBtn.addEventListener("click", loadFromUrl);
-fileInput.addEventListener("change", loadFromFile);
+if (fileInput) fileInput.addEventListener("change", loadFromFile);
 playBtn.addEventListener("click", play);
 pauseBtn.addEventListener("click", pause);
 stopBtn.addEventListener("click", () => stopPlayback(true));
 
 trackSelect.addEventListener("change", () => {
-  currentTrack = Number(trackSelect.value);
-  if (isPlaying) play();
+  setCurrentTrack(Number(trackSelect.value));
+  play();
 });
 
 volume.addEventListener("input", () => {
