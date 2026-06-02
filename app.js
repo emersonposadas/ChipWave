@@ -37,7 +37,7 @@ const CHANNELS = [
 ];
 
 const RANDOM_TRACK_LIMIT = 15;
-const MIX_SCOPE_VISUAL_GAIN = 2.8;
+const MIX_SCOPE_VISUAL_GAIN = 1.65;
 
 const VISUAL_TUNING = {
   pulse: { phaseDivisor: 260, minPhaseRate: 0.04, maxPhaseRate: 2.2, lineWidth: 2.5, glow: 8 },
@@ -1000,7 +1000,9 @@ function drawLoop() {
     const startSample = findStableWaveStart(timeData, visibleSamples);
 
     const cycles = scopeWindow.cycles;
-    const baseAmp = Math.min(h * 0.48, Math.max(6, effectiveAmplitude * h * 0.98));
+    const maxVisualHeight = visualType === "sample" ? h * 0.36 : h * 0.48;
+    const amplitudeScale = visualType === "sample" ? h * 0.68 : h * 0.98;
+    const baseAmp = Math.min(maxVisualHeight, Math.max(6, effectiveAmplitude * amplitudeScale));
     const phase = 0;
     const tuning = VISUAL_TUNING[visualType] || VISUAL_TUNING.pulse;
 
@@ -1243,9 +1245,8 @@ function getDisplayWaveSample(type, normalizedX, cycles, phase, timeData, startS
   }
 
   const real = getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples);
-  const mixBoost = Math.max(1.45, Math.min(3.1, 1.25 + amplitude * 2.2));
 
-  return Math.max(-1, Math.min(1, real * mixBoost * (muted ? 0.25 : 1)));
+  return Math.max(-1, Math.min(1, real * (muted ? 0.25 : 1)));
 }
 
 function blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, amount) {
