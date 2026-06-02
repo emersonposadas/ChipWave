@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BitWave Piano - 8-bit Channel Visualizer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">GitHub Pages / Web Audio API</p>
+        <h1>BitWave Piano</h1>
+        <p class="subtitle">
+          Carga una URL de audio 8-bit, reprodúcela y visualiza cuatro canales estimados como ondas.
+        </p>
+      </div>
+      <div class="meter">
+        <span id="statusDot"></span>
+        <strong id="statusText">Listo</strong>
+      </div>
+    </header>
+
+    <section class="panel">
+      <label for="prompt">Prompt o URL</label>
+      <textarea id="prompt" spellcheck="false" placeholder="Ejemplo: analiza esta canción 8-bit https://example.com/song.mp3"></textarea>
+
+      <div class="controls">
+        <button id="loadBtn">Cargar URL</button>
+        <button id="playBtn" disabled>Play</button>
+        <button id="pauseBtn" disabled>Pausa</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <label class="fileLabel">
+          Subir audio
+          <input id="fileInput" type="file" accept="audio/*" />
+        </label>
+      </div>
+
+      <div class="transport">
+        <span id="timeLabel">00:00 / 00:00</span>
+        <input id="seek" type="range" min="0" max="1000" value="0" disabled />
+        <label class="volume">
+          Volumen
+          <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" />
+        </label>
+      </div>
+
+      <p class="hint">
+        Nota: si la URL externa bloquea CORS, usa “Subir audio” o aloja el archivo en el mismo repo.
+      </p>
+    </section>
+
+    <section class="visualizers" aria-label="Visualizadores de canales">
+      <article class="channel">
+        <div class="channelHead">
+          <h2>Canal 1</h2>
+          <span>Graves / pulso</span>
+        </div>
+        <canvas id="ch0" width="1200" height="260"></canvas>
+        <p id="readout0">—</p>
+      </article>
+
+      <article class="channel">
+        <div class="channelHead">
+          <h2>Canal 2</h2>
+          <span>Medios bajos</span>
+        </div>
+        <canvas id="ch1" width="1200" height="260"></canvas>
+        <p id="readout1">—</p>
+      </article>
+
+      <article class="channel">
+        <div class="channelHead">
+          <h2>Canal 3</h2>
+          <span>Melodía / medios altos</span>
+        </div>
+        <canvas id="ch2" width="1200" height="260"></canvas>
+        <p id="readout2">—</p>
+      </article>
+
+      <article class="channel">
+        <div class="channelHead">
+          <h2>Canal 4</h2>
+          <span>Brillo / ruido</span>
+        </div>
+        <canvas id="ch3" width="1200" height="260"></canvas>
+        <p id="readout3">—</p>
+      </article>
+    </section>
+
+    <section class="panel pianoPanel">
+      <div>
+        <h2>Piano simple</h2>
+        <p class="hint">Toca notas con el mouse o con el teclado: A S D F G H J K.</p>
+      </div>
+      <div id="piano" class="piano" aria-label="Piano"></div>
+    </section>
+
+    <audio id="audio" crossorigin="anonymous"></audio>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
