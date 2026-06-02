@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       nsf_url:
-        description: "URL directa del archivo .nsf/.nsfe a importar"
+        description: "URL directa .nsf/.nsfe/.zip o página de Zophar con 'Download original music files'"
         required: true
         type: string
       filename:
-        description: "Nombre opcional para guardar, ejemplo mega-man-3.nsf"
+        description: "Nombre opcional para guardar, ejemplo super-mario-bros-3.nsf"
         required: false
         type: string
 
@@ -23,64 +23,148 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Prepare filename
-        id: vars
-        shell: bash
-        run: |
-          mkdir -p nsf
-
-          INPUT_NAME="${{ inputs.filename }}"
-          URL="${{ inputs.nsf_url }}"
-
-          if [ -z "$INPUT_NAME" ]; then
-            INPUT_NAME="$(basename "${URL%%\?*}")"
-          fi
-
-          SAFE_NAME="$(echo "$INPUT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g')"
-
-          if [[ ! "$SAFE_NAME" =~ \.(nsf|nsfe)$ ]]; then
-            SAFE_NAME="${SAFE_NAME}.nsf"
-          fi
-
-          echo "filename=$SAFE_NAME" >> "$GITHUB_OUTPUT"
-          echo "path=nsf/$SAFE_NAME" >> "$GITHUB_OUTPUT"
-
-      - name: Download NSF
-        shell: bash
-        run: |
-          curl -L --fail --retry 3 --connect-timeout 20 \
-            -A "Mozilla/5.0 GitHubActions NSF Importer" \
-            "${{ inputs.nsf_url }}" \
-            -o "${{ steps.vars.outputs.path }}"
-
-      - name: Validate and update catalog
+      - name: Download, extract if needed, validate and update catalog
         shell: python
+        env:
+          INPUT_URL: ${{ inputs.nsf_url }}
+          INPUT_FILENAME: ${{ inputs.filename }}
         run: |
           from pathlib import Path
-          import json
+          from urllib.request import Request, urlopen
+          from urllib.parse import urljoin, urlparse, unquote
           from datetime import datetime, timezone
+          import json
+          import os
+          import re
+          import shutil
+          import zipfile
 
-          path = Path("${{ steps.vars.outputs.path }}")
-          data = path.read_bytes()
+          nsf_dir = Path("nsf")
+          nsf_dir.mkdir(exist_ok=True)
+          work_dir = Path("_import_tmp")
+          if work_dir.exists():
+              shutil.rmtree(work_dir)
+          work_dir.mkdir()
 
+          source_url = os.environ["INPUT_URL"].strip()
+          requested_name = os.environ.get("INPUT_FILENAME", "").strip()
+
+          def fetch(url: str) -> bytes:
+              req = Request(
+                  url,
+                  headers={
+                      "User-Agent": "Mozilla/5.0 GitHubActions NSF Importer",
+                      "Accept": "*/*",
+                  },
+              )
+              with urlopen(req, timeout=45) as response:
+                  return response.read()
+
+          def filename_from_url(url: str) -> str:
+              path = unquote(urlparse(url).path)
+              name = Path(path).name
+              return name or "download"
+
+          def safe_name(name: str) -> str:
+              name = name.strip().lower()
+              name = re.sub(r"[^a-z0-9._-]+", "-", name)
+              name = name.strip("-._")
+              return name or "imported.nsf"
+
+          def resolve_page_if_needed(url: str) -> tuple[str, bytes | None]:
+              lower_path = urlparse(url).path.lower()
+              if lower_path.endswith((".nsf", ".nsfe", ".zip")):
+                  return url, None
+
+              html_bytes = fetch(url)
+              html = html_bytes.decode("utf-8", errors="replace")
+
+              hrefs = re.findall(r'href=["\']([^"\']+)["\']', html, flags=re.I)
+              candidates = []
+              for href in hrefs:
+                  full = urljoin(url, href)
+                  lower = full.lower()
+
+                  # Prefer Zophar original-music ZIPs over per-track MP3s.
+                  if lower.endswith((".nsf", ".nsfe")):
+                      candidates.append((0, full))
+                  elif lower.endswith(".zip") and "soundfiles" in lower and "mp3" not in lower:
+                      candidates.append((1, full))
+                  elif lower.endswith(".zip") and "zophar" in lower and "mp3" not in lower:
+                      candidates.append((2, full))
+
+              if not candidates:
+                  raise SystemExit(
+                      "No encontré un enlace .nsf/.nsfe/.zip en la página. "
+                      "Usa una URL directa o una página de Zophar con 'Download original music files'."
+                  )
+
+              candidates.sort(key=lambda x: x[0])
+              return candidates[0][1], html_bytes
+
+          resolved_url, _ = resolve_page_if_needed(source_url)
+          print(f"Resolved URL: {resolved_url}")
+
+          blob = fetch(resolved_url)
+          source_name = requested_name or filename_from_url(resolved_url)
+          source_name = safe_name(source_name)
+
+          downloaded = work_dir / source_name
+          downloaded.write_bytes(blob)
+
+          extracted_nsf = None
+
+          if downloaded.suffix.lower() == ".zip":
+              with zipfile.ZipFile(downloaded) as zf:
+                  names = [
+                      n for n in zf.namelist()
+                      if n.lower().endswith((".nsf", ".nsfe")) and not n.endswith("/")
+                  ]
+                  if not names:
+                      raise SystemExit("El ZIP no contiene archivos .nsf/.nsfe.")
+                  names.sort(key=lambda n: (len(Path(n).name), n.lower()))
+                  chosen = names[0]
+                  extracted_name = safe_name(Path(chosen).name)
+                  extracted_nsf = work_dir / extracted_name
+                  extracted_nsf.write_bytes(zf.read(chosen))
+                  print(f"Extracted NSF from ZIP: {chosen}")
+          else:
+              extracted_nsf = downloaded
+
+          data = extracted_nsf.read_bytes()
           if len(data) < 128 or data[:5] != b"NESM\x1a":
-              raise SystemExit(f"{path} is not a valid NSF file")
+              raise SystemExit(f"{extracted_nsf.name} is not a valid NSF file")
 
           def read_ascii(start, length):
               raw = data[start:start+length].split(b"\x00", 1)[0]
               return raw.decode("latin-1", errors="replace").strip()
 
+          if requested_name:
+              final_name = safe_name(requested_name)
+              if not final_name.endswith((".nsf", ".nsfe")):
+                  final_name += ".nsf"
+          else:
+              final_name = safe_name(extracted_nsf.name)
+              if not final_name.endswith((".nsf", ".nsfe")):
+                  final_name += ".nsf"
+
+          final_path = nsf_dir / final_name
+          final_path.write_bytes(data)
+
+          imported_at = datetime.now(timezone.utc).isoformat()
           item = {
-              "filename": path.name,
-              "path": path.as_posix(),
-              "title": read_ascii(14, 32) or path.stem,
+              "filename": final_path.name,
+              "path": final_path.as_posix(),
+              "title": read_ascii(14, 32) or final_path.stem,
               "artist": read_ascii(46, 32) or "Unknown",
               "songs": data[6],
               "startSong": data[7],
-              "importedAt": datetime.now(timezone.utc).isoformat()
+              "sourceUrl": source_url,
+              "resolvedUrl": resolved_url,
+              "importedAt": imported_at,
           }
 
-          catalog_path = Path("nsf/catalog.json")
+          catalog_path = nsf_dir / "catalog.json"
           if catalog_path.exists():
               catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
           else:
@@ -90,10 +174,11 @@ jobs:
           items.append(item)
           items.sort(key=lambda x: (x.get("title") or x.get("filename") or "").lower())
 
-          catalog["updatedAt"] = item["importedAt"]
+          catalog["updatedAt"] = imported_at
           catalog["items"] = items
-
           catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False), encoding="utf-8")
+
+          shutil.rmtree(work_dir)
 
       - name: Commit imported NSF
         shell: bash
@@ -101,5 +186,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add nsf/
-          git commit -m "Import NSF: ${{ steps.vars.outputs.filename }}" || echo "No changes to commit"
+          git commit -m "Import NSF" || echo "No changes to commit"
           git push
