@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-02T18:57:33.140722+00:00",
+  "updatedAt": "2026-06-02T18:58:05.823948+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -88,6 +88,17 @@
       "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/ninja-gaiden-[shadow-warriors]/Ninja%20Gaiden%20%20%5BShadow%20Warriors%5D%20%28EMU%29.zophar.zip",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/ninja-gaiden-[shadow-warriors]/Ninja%20Gaiden%20%20%5BShadow%20Warriors%5D%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T16:04:11.010441+00:00"
+    },
+    {
+      "filename": "silversurfer.nsf",
+      "path": "nsf/silversurfer.nsf",
+      "title": "Silver Surfer C: Stephen Ruddy",
+      "artist": "Timothy John / Geoff Follin",
+      "songs": 24,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/silver-surfer/Silver%20Surfer%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/silver-surfer/Silver%20Surfer%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-02T18:58:05.823948+00:00"
     },
     {
       "filename": "smb3.nsf",
