@@ -84,8 +84,7 @@ function getMissingGmeRuntimeSymbols() {
     "Module.getValue": !!window.Module?.getValue,
     "Module._malloc": !!window.Module?._malloc,
     "Module._free": !!window.Module?._free,
-    "Module.HEAPU8": !!window.Module?.HEAPU8,
-    "Module.HEAP16": !!window.Module?.HEAP16,
+    "Module.writeArrayToMemory": !!window.Module?.writeArrayToMemory,
     "Module._gme_open_data": !!window.Module?._gme_open_data,
     "Module._gme_play": !!window.Module?._gme_play,
     "Module._gme_mute_voice": !!window.Module?._gme_mute_voice
@@ -396,7 +395,15 @@ function openGme(track) {
     throw new Error("No se pudo reservar memoria WASM para el NSF.");
   }
 
-  Module.HEAPU8.set(currentBytes, dataPtr);
+  if (typeof Module.writeArrayToMemory === "function") {
+    Module.writeArrayToMemory(currentBytes, dataPtr);
+  } else if (Module.HEAPU8) {
+    Module.HEAPU8.set(currentBytes, dataPtr);
+  } else {
+    Module._free(ref);
+    Module._free(dataPtr);
+    throw new Error("No hay método disponible para copiar el NSF a memoria WASM. Recompila libgme con writeArrayToMemory o EXPORT_ALL=1.");
+  }
 
   const result = Module.ccall(
     "gme_open_data",
@@ -522,8 +529,8 @@ function processAudio(event) {
     let peak = 0;
 
     for (let i = 0; i < frameSize; i++) {
-      const l = Module.HEAP16[base + i * 2] / 32768;
-      const r = Module.HEAP16[base + i * 2 + 1] / 32768;
+      const l = Module.getValue(samplePtr + i * 4, "i16") / 32768;
+      const r = Module.getValue(samplePtr + i * 4 + 2, "i16") / 32768;
 
       left[i] = l;
       right[i] = r;
