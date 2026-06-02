@@ -1,4 +1,4 @@
-console.log("ChipWave app build v10 loaded");
+console.log("ChipWave app build v11 UI loaded");
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -847,7 +847,7 @@ window.addEventListener("error", event => {
   }
 });
 
-setMuteMode("libgme v9 pendiente hasta Play");
+setMuteMode("libgme v11 pendiente hasta Play");
 updateMuteUIOnly();
 loadCatalog();
 
