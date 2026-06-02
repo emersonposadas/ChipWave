@@ -65,8 +65,8 @@ let lastGmeError = 0;
 
 const mutedChannels = [false, false, false, false, false];
 
-let waveCyclesToShow = Number(waveCyclesSelect?.value || 3);
-let waveStaticEnabled = Boolean(waveStaticToggle?.checked);
+let waveCyclesToShow = Number((waveCyclesSelect && waveCyclesSelect.value) || 3);
+let waveStaticEnabled = Boolean(waveStaticToggle && waveStaticToggle.checked);
 const channelVisualState = CHANNELS.map(() => ({ frequency: 0, amplitude: 0, phase: 0, lastFrameTime: 0 }));
 let initialRandomAutoplayDone = false;
 
@@ -98,14 +98,14 @@ function waitForGmeRuntime() {
 function getMissingGmeRuntimeSymbols() {
   const checks = {
     "window.Module": !!window.Module,
-    "Module.ccall": !!window.Module?.ccall,
-    "Module.getValue": !!window.Module?.getValue,
-    "Module._malloc": !!window.Module?._malloc,
-    "Module._free": !!window.Module?._free,
-    "Module.writeArrayToMemory": !!window.Module?.writeArrayToMemory,
-    "Module._gme_open_data": !!window.Module?._gme_open_data,
-    "Module._gme_play": !!window.Module?._gme_play,
-    "Module._gme_mute_voice": !!window.Module?._gme_mute_voice
+    "Module.ccall": !!(window.Module && window.Module.ccall),
+    "Module.getValue": !!(window.Module && window.Module.getValue),
+    "Module._malloc": !!(window.Module && window.Module._malloc),
+    "Module._free": !!(window.Module && window.Module._free),
+    "Module.writeArrayToMemory": !!(window.Module && window.Module.writeArrayToMemory),
+    "Module._gme_open_data": !!(window.Module && window.Module._gme_open_data),
+    "Module._gme_play": !!(window.Module && window.Module._gme_play),
+    "Module._gme_mute_voice": !!(window.Module && window.Module._gme_mute_voice)
   };
 
   return Object.entries(checks)
@@ -212,7 +212,7 @@ async function loadCatalog() {
     setHelp(`Catálogo cargado: ${items.length} archivo(s).`, "ok");
     if (!initialRandomAutoplayDone) {
       initialRandomAutoplayDone = true;
-      await playRandomCatalogTrack(items);
+      await loadRandomCatalogTrack(items);
     }
 
     return items;
@@ -233,25 +233,24 @@ async function loadFromCatalog() {
   await fetchAndLoad(path);
 }
 
-async function playRandomCatalogTrack(items) {
-  const playableItems = items.filter(item => item?.path);
+async function loadRandomCatalogTrack(items) {
+  const playableItems = items.filter(item => item && item.path);
   if (!playableItems.length) return;
 
   const item = playableItems[Math.floor(Math.random() * playableItems.length)];
   catalogSelect.value = item.path;
-  setHelp("Seleccionando un NSF y track aleatorios del catálogo.", "ok");
-  await fetchAndLoad(item.path, { randomTrack: true, autoplay: true });
+  await fetchAndLoad(item.path, { randomTrack: true, requiresUserPlay: true });
 }
 
 function updateMetadata() {
   fileNameEl.textContent = currentName;
-  songTitleEl.textContent = currentInfo?.title || "—";
-  artistEl.textContent = currentInfo?.artist || "—";
-  songCountEl.textContent = currentInfo?.songs ? String(currentInfo.songs) : "—";
+  songTitleEl.textContent = (currentInfo && currentInfo.title) || "—";
+  artistEl.textContent = (currentInfo && currentInfo.artist) || "—";
+  songCountEl.textContent = currentInfo && currentInfo.songs ? String(currentInfo.songs) : "—";
 
   trackSelect.innerHTML = "";
-  const count = currentInfo?.songs || 1;
-  const start = Math.max(1, currentInfo?.startSong || 1);
+  const count = (currentInfo && currentInfo.songs) || 1;
+  const start = Math.max(1, (currentInfo && currentInfo.startSong) || 1);
 
   for (let i = 0; i < count; i++) {
     const option = document.createElement("option");
@@ -285,6 +284,10 @@ async function fetchAndLoad(path, options = {}) {
       selectRandomTrack();
     }
 
+    if (options.requiresUserPlay) {
+      setHelp(`Demo cargada: ${currentName}, Track ${currentTrack + 1}. En iOS toca Play para activar el audio.`, "ok");
+    }
+
     if (options.autoplay) {
       await play();
       if (isPlaying) {
@@ -314,7 +317,7 @@ async function loadFromUrl() {
 }
 
 async function loadFromFile() {
-  const file = fileInput.files?.[0];
+  const file = fileInput.files && fileInput.files[0];
   if (!file) return;
 
   try {
@@ -351,7 +354,7 @@ async function loadNsfBytes(bytes, name) {
 }
 
 function selectRandomTrack() {
-  const count = currentInfo?.songs || trackSelect.options.length || 1;
+  const count = (currentInfo && currentInfo.songs) || trackSelect.options.length || 1;
   const randomTrack = Math.floor(Math.random() * Math.max(1, count));
 
   currentTrack = randomTrack;
@@ -364,7 +367,13 @@ async function ensureAudio() {
   assertGmeRuntimeReady();
 
   if (!audioCtx) {
-    audioCtx = new AudioContext();
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+
+    if (!AudioContextCtor) {
+      throw new Error("Este navegador no expone Web Audio API. Actualiza iOS/Safari o prueba en otro navegador.");
+    }
+
+    audioCtx = new AudioContextCtor();
 
     masterGain = audioCtx.createGain();
     masterGain.gain.value = Number(volume.value);
@@ -666,13 +675,13 @@ function processAudio(event) {
       const abs = Math.max(Math.abs(l), Math.abs(r));
       if (abs > peak) peak = abs;
 
-      if (mixScope?.time) {
+      if (mixScope && mixScope.time) {
         mixScope.time[i] = Math.max(0, Math.min(255, Math.round(128 + mono * 128)));
       }
     }
 
     lastPcmPeak = peak;
-    if (mixScope?.history) {
+    if (mixScope && mixScope.history) {
       mixScope.history.copyWithin(0, frameSize);
       mixScope.history.set(mixScope.time, mixScope.history.length - frameSize);
       mixScope.lastPeak = peak;
@@ -688,7 +697,7 @@ function processAudio(event) {
 
 function renderChannelScopes() {
   channelScopes.forEach(scope => {
-    if (!scope?.emu || !scope.samplePtr || !scope.time) return;
+    if (!scope || !scope.emu || !scope.samplePtr || !scope.time) return;
 
     try {
       const err = Module.ccall(
@@ -781,7 +790,8 @@ function updateMuteUIOnly() {
 
     button.textContent = muted ? "Unmute" : "Mute";
     button.setAttribute("aria-pressed", muted ? "true" : "false");
-    button.closest(".channel")?.classList.toggle("muted", muted);
+    const channelEl = button.closest(".channel");
+    if (channelEl) channelEl.classList.toggle("muted", muted);
   });
 }
 
@@ -862,14 +872,14 @@ function drawLoop() {
 
     const scope = channelScopes[index];
     const timeData = getChannelTimeData(visualType, scope, analyzerPack);
-    const hasRealVoiceScope = Boolean(scope?.time);
+    const hasRealVoiceScope = Boolean(scope && scope.time);
     const usingRealVoiceData = hasRealVoiceScope && timeData !== analyzerPack.time;
     let fftPeak = { frequency: 0 };
 
     if (!hasRealVoiceScope) {
       analyzerPack.analyser.getByteTimeDomainData(analyzerPack.time);
       analyzerPack.analyser.getByteFrequencyData(analyzerPack.freq);
-      fftPeak = findPeak(analyzerPack.freq, audioCtx?.sampleRate || 44100, analyzerPack.analyser.fftSize);
+      fftPeak = findPeak(analyzerPack.freq, (audioCtx && audioCtx.sampleRate) || 44100, analyzerPack.analyser.fftSize);
     }
 
     const rawAmplitude = visualType === "sample" && mixScope
@@ -877,7 +887,7 @@ function drawLoop() {
       : hasRealVoiceScope
         ? scope.lastPeak
         : peakAmplitude(timeData);
-    const sampleRate = audioCtx?.sampleRate || 44100;
+    const sampleRate = (audioCtx && audioCtx.sampleRate) || 44100;
     const measuredFrequency = estimateFrequencyFromTimeData(timeData, sampleRate) || fftPeak.frequency;
     const smoothed = updateChannelVisualState(index, measuredFrequency, rawAmplitude, performance.now());
     // Visual amplitude comes from the analyzed audio data, not from the master volume slider.
@@ -952,7 +962,7 @@ function drawLoop() {
 }
 
 function getMasterVolumeAmount() {
-  const value = Number(volume?.value ?? 1);
+  const value = Number(volume && volume.value != null ? volume.value : 1);
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
 }
 
@@ -962,7 +972,7 @@ function updateVolumeLabel() {
 
 function updateChannelVisualState(index, measuredFrequency, measuredAmplitude, nowMs) {
   const state = channelVisualState[index];
-  const visualType = CHANNELS[index]?.visualType || "pulse";
+  const visualType = (CHANNELS[index] && CHANNELS[index].visualType) || "pulse";
   const tuning = VISUAL_TUNING[visualType] || VISUAL_TUNING.pulse;
   const safeFrequency = Number.isFinite(measuredFrequency) && measuredFrequency > 0 ? measuredFrequency : state.frequency || 0;
   const safeAmplitude = Number.isFinite(measuredAmplitude) ? Math.max(0, Math.min(1, measuredAmplitude)) : 0;
@@ -1011,8 +1021,8 @@ function getDisplayAmplitude(type, dataAmplitude, muted = false) {
 }
 
 function getChannelTimeData(type, scope, analyzerPack) {
-  if (type === "sample" && mixScope?.history) return mixScope.history;
-  if (!scope?.time) return analyzerPack.time;
+  if (type === "sample" && mixScope && mixScope.history) return mixScope.history;
+  if (!scope || !scope.time) return analyzerPack.time;
 
   if (type === "noise") {
     return scope.history || scope.time;
@@ -1067,7 +1077,7 @@ function peakAmplitude(timeData) {
 }
 
 function estimateFrequencyFromTimeData(timeData, sampleRate) {
-  if (!timeData?.length || !sampleRate) return 0;
+  if (!timeData || !timeData.length || !sampleRate) return 0;
 
   let mean = 0;
   for (const value of timeData) mean += value;
@@ -1243,7 +1253,7 @@ function findPeak(freqData, sampleRate, fftSize) {
 
 refreshCatalogBtn.addEventListener("click", loadCatalog);
 loadCatalogBtn.addEventListener("click", loadFromCatalog);
-loadUrlBtn?.addEventListener("click", loadFromUrl);
+if (loadUrlBtn) loadUrlBtn.addEventListener("click", loadFromUrl);
 fileInput.addEventListener("change", loadFromFile);
 playBtn.addEventListener("click", play);
 pauseBtn.addEventListener("click", pause);
@@ -1259,13 +1269,17 @@ volume.addEventListener("input", () => {
   updateVolumeLabel();
 });
 
-waveCyclesSelect?.addEventListener("change", () => {
-  waveCyclesToShow = Number(waveCyclesSelect.value) || 3;
-});
+if (waveCyclesSelect) {
+  waveCyclesSelect.addEventListener("change", () => {
+    waveCyclesToShow = Number(waveCyclesSelect.value) || 3;
+  });
+}
 
-waveStaticToggle?.addEventListener("change", () => {
-  waveStaticEnabled = waveStaticToggle.checked;
-});
+if (waveStaticToggle) {
+  waveStaticToggle.addEventListener("change", () => {
+    waveStaticEnabled = waveStaticToggle.checked;
+  });
+}
 
 document.querySelectorAll("[data-mute-channel]").forEach(button => {
   button.addEventListener("click", () => toggleMute(Number(button.dataset.muteChannel)));
