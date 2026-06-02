@@ -1,4 +1,16 @@
 {
-  "updatedAt": null,
-  "items": []
+  "updatedAt": "2026-06-02T11:48:24.806939+00:00",
+  "items": [
+    {
+      "filename": "smb3.nsf",
+      "path": "nsf/smb3.nsf",
+      "title": "Super Mario Bros. 3",
+      "artist": "Koji Kondo",
+      "songs": 60,
+      "startSong": 1,
+      "sourceUrl": "https://www.zophar.net/music/nintendo-nes-nsf/super-mario-bros-3",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/super-mario-bros-3/Super%20Mario%20Bros.%203%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-02T11:48:24.806939+00:00"
+    }
+  ]
 }
