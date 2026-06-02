@@ -29,26 +29,6 @@ jobs:
           rm -rf _gme _gme-build
           git clone --depth 1 https://github.com/libgme/game-music-emu.git _gme
 
-      - name: Patch GME endianness for Emscripten
-        shell: python
-        run: |
-          from pathlib import Path
-
-          path = Path("_gme/gme/blargg_endian.h")
-          text = path.read_text(encoding="utf-8")
-
-          marker = "#if !defined (BLARGG_BIG_ENDIAN) && !defined (BLARGG_LITTLE_ENDIAN)"
-          patch = '#if defined(__EMSCRIPTEN__) && !defined(BLARGG_BIG_ENDIAN) && !defined(BLARGG_LITTLE_ENDIAN)\\n#define BLARGG_LITTLE_ENDIAN 1\\n#endif\\n\\n'
-
-          if patch.strip() not in text:
-              if marker in text:
-                  text = text.replace(marker, patch + marker, 1)
-              else:
-                  text = patch + text
-
-          path.write_text(text, encoding="utf-8")
-          print("Patched _gme/gme/blargg_endian.h for Emscripten little-endian.")
-
       - name: Configure Game_Music_Emu with CMake
         run: |
           emcmake cmake -S _gme -B _gme-build -G Ninja \
@@ -62,7 +42,7 @@ jobs:
           cmake --build _gme-build --config Release
 
           echo "Built files:"
-          find _gme-build -maxdepth 4 -type f | sort
+          find _gme-build -maxdepth 5 -type f | sort
 
           LIBGME="$(find _gme-build -name 'libgme.a' -o -name 'libgme*.a' | head -n 1)"
 
@@ -79,7 +59,7 @@ jobs:
           mkdir -p vendor
 
           emcc \
-            "$LIBGME" \
+            -Wl,--whole-archive "$LIBGME" -Wl,--no-whole-archive \
             -O3 \
             -s WASM=1 \
             -s MODULARIZE=0 \
@@ -107,8 +87,8 @@ jobs:
 
       - name: Verify exported mute symbol
         run: |
-          grep -q "_gme_mute_voice" vendor/libgme.js && echo "gme_mute_voice export appears in libgme.js" || {
-            echo "Warning: _gme_mute_voice string not found in libgme.js"
+          grep -q "gme_mute_voice" vendor/libgme.js && echo "gme_mute_voice appears in libgme.js" || {
+            echo "Warning: gme_mute_voice string not found in libgme.js"
           }
 
       - name: Commit vendor build
