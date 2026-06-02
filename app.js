@@ -1,4 +1,4 @@
-console.log("ChipWave app build v15 analyzer-volume waveform UI loaded");
+console.log("ChipWave app build v16 noise-normalized waveform UI loaded");
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -702,7 +702,7 @@ function drawLoop() {
     // Visual amplitude comes from the analyzed audio data, not from the master volume slider.
     // This keeps the oscilloscope faithful to the generated signal while the slider only controls listening level.
     const dataAmplitude = mutedChannels[index] ? 0 : smoothed.amplitude;
-    const effectiveAmplitude = dataAmplitude;
+    const effectiveAmplitude = getDisplayAmplitude(CHANNELS[index].visualType, dataAmplitude);
     const cyclesToShow = waveCyclesToShow || 3;
     const displayFrequency = Math.max(0, smoothed.frequency);
     const samplesPerCycle = displayFrequency > 0 ? sampleRate / displayFrequency : analyzerPack.time.length;
@@ -750,7 +750,7 @@ function drawLoop() {
     const visualLabel = getDisplayWaveLabel(CHANNELS[index].visualType);
 
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · forma ${visualLabel} · frecuencia ${Math.round(displayFrequency)} Hz · amplitud por datos ${(effectiveAmplitude * 100).toFixed(1)}% · ventana ${formatVisibleWindowMs(cyclesToShow, displayFrequency)} · PCM real ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · forma ${visualLabel} · frecuencia ${Math.round(displayFrequency)} Hz · amplitud datos ${(dataAmplitude * 100).toFixed(1)}% · visual ${(effectiveAmplitude * 100).toFixed(1)}% · ventana ${formatVisibleWindowMs(cyclesToShow, displayFrequency)} · PCM real ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
@@ -781,6 +781,24 @@ function updateChannelVisualState(index, measuredFrequency, measuredAmplitude, n
   state.phase = (state.phase + deltaSeconds * visualCyclesPerSecond) % 1;
 
   return state;
+}
+
+function getDisplayAmplitude(type, dataAmplitude) {
+  const amount = Number.isFinite(dataAmplitude) ? Math.max(0, Math.min(1, dataAmplitude)) : 0;
+
+  if (amount <= 0.002) return 0;
+
+  if (type === "noise") {
+    // El canal Noise del APU suele llegar con menos pico en el analyser.
+    // Esta normalización conserva que la fuente sea el dato analizado, pero evita que se vea diminuto.
+    return Math.min(0.92, Math.max(0.18, amount * 3.8));
+  }
+
+  if (type === "sample") {
+    return Math.min(0.86, amount * 1.35);
+  }
+
+  return amount;
 }
 
 function peakAmplitude(timeData) {
