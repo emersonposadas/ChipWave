@@ -1,42 +1,686 @@
-const nsfUrlInput=document.getElementById("nsfUrl"),loadUrlBtn=document.getElementById("loadUrlBtn"),fileInput=document.getElementById("fileInput"),playBtn=document.getElementById("playBtn"),pauseBtn=document.getElementById("pauseBtn"),stopBtn=document.getElementById("stopBtn"),trackSelect=document.getElementById("trackSelect"),volume=document.getElementById("volume"),statusText=document.getElementById("statusText"),statusDot=document.getElementById("statusDot"),helpText=document.getElementById("helpText"),fileNameEl=document.getElementById("fileName"),songTitleEl=document.getElementById("songTitle"),artistEl=document.getElementById("artist"),songCountEl=document.getElementById("songCount"),catalogSelect=document.getElementById("catalogSelect"),loadCatalogBtn=document.getElementById("loadCatalogBtn"),refreshCatalogBtn=document.getElementById("refreshCatalogBtn"),unmuteAllBtn=document.getElementById("unmuteAllBtn");const canvases=["ch0","ch1","ch2","ch3","ch4"].map(id=>document.getElementById(id)),ctxs=canvases.map(c=>c.getContext("2d")),readouts=[0,1,2,3,4].map(i=>document.getElementById(`readout${i}`));const CHANNELS=[{name:"Pulse 1"},{name:"Pulse 2"},{name:"Triangle"},{name:"Noise"},{name:"DPCM/Mix"}];let audioCtx,processor,masterGain,analyserSource,analyzers=[],channelGains=[],rafId,currentBytes=null,currentInfo=null,currentName="—",gme=null,samplePtr=0,frameSize=4096,isPlaying=false,currentTrack=0;const mutedChannels=[false,false,false,false,false];
+const nsfUrlInput = document.getElementById("nsfUrl");
+const loadUrlBtn = document.getElementById("loadUrlBtn");
+const fileInput = document.getElementById("fileInput");
+const playBtn = document.getElementById("playBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const stopBtn = document.getElementById("stopBtn");
+const trackSelect = document.getElementById("trackSelect");
+const volume = document.getElementById("volume");
+const statusText = document.getElementById("statusText");
+const statusDot = document.getElementById("statusDot");
+const helpText = document.getElementById("helpText");
+const fileNameEl = document.getElementById("fileName");
+const songTitleEl = document.getElementById("songTitle");
+const artistEl = document.getElementById("artist");
+const songCountEl = document.getElementById("songCount");
+const muteModeEl = document.getElementById("muteMode");
+const catalogSelect = document.getElementById("catalogSelect");
+const loadCatalogBtn = document.getElementById("loadCatalogBtn");
+const refreshCatalogBtn = document.getElementById("refreshCatalogBtn");
+const unmuteAllBtn = document.getElementById("unmuteAllBtn");
 
-function setStatus(t,m=""){statusText.textContent=t;statusDot.className=m}
-function setHelp(t,m=""){helpText.textContent=t;helpText.className=`hint ${m}`}
-function extractUrlOrPath(t){const trimmed=t.trim();const absolute=trimmed.match(/https?:\/\/[^\s"'<>]+/i);if(absolute)return absolute[0];const relative=trimmed.match(/[A-Za-z0-9_./-]+\.(nsf|nsfe)(\?[^\s"'<>]*)?/i);return relative?relative[0]:""}
-function readAscii(b,s,l){let o="";for(let i=s;i<s+l&&i<b.length;i++){const c=b[i];if(c===0)break;o+=String.fromCharCode(c)}return o.trim()}
-function parseNsfHeader(b){const magic=readAscii(b,0,5);if(magic!=="NESM\x1A")throw new Error("El archivo no parece ser NSF válido.");return{version:b[5],songs:b[6],startSong:b[7],title:readAscii(b,14,32)||"Sin título",artist:readAscii(b,46,32)||"Desconocido",copyright:readAscii(b,78,32)||"—",expansion:b[123]}}
-async function loadCatalog(){try{const r=await fetch("nsf/catalog.json?cache="+Date.now());if(!r.ok)throw new Error("No catalog");const catalog=await r.json();catalogSelect.innerHTML="";const items=Array.isArray(catalog.items)?catalog.items:[];if(!items.length){catalogSelect.innerHTML='<option value="">No hay archivos cargados</option>';return}for(const item of items){const o=document.createElement("option");o.value=item.path;o.textContent=`${item.title||item.filename} — ${item.artist||"Desconocido"}`;catalogSelect.appendChild(o)}setHelp(`Catálogo cargado: ${items.length} archivo(s).`,"ok")}catch(e){console.warn(e);catalogSelect.innerHTML='<option value="">No hay catálogo disponible</option>';setHelp("No se pudo cargar nsf/catalog.json. Ejecuta el workflow o sube archivos manualmente.","error")}}
-async function loadFromCatalog(){const path=catalogSelect.value;if(!path){setStatus("No hay NSF seleccionado","error");return}await fetchAndLoad(path)}
-function updateMetadata(){fileNameEl.textContent=currentName;songTitleEl.textContent=currentInfo?.title||"—";artistEl.textContent=currentInfo?.artist||"—";songCountEl.textContent=currentInfo?.songs?String(currentInfo.songs):"—";trackSelect.innerHTML="";const count=currentInfo?.songs||1,start=Math.max(1,currentInfo?.startSong||1);for(let i=0;i<count;i++){const o=document.createElement("option");o.value=String(i);o.textContent=`Track ${i+1}`;if(i===start-1)o.selected=true;trackSelect.appendChild(o)}currentTrack=Math.max(0,start-1);trackSelect.value=String(currentTrack);trackSelect.disabled=false;playBtn.disabled=false;pauseBtn.disabled=false;stopBtn.disabled=false}
-async function fetchAndLoad(path){setStatus("Cargando NSF...","");setHelp("Descargando archivo NSF.","");try{const r=await fetch(path);if(!r.ok)throw new Error(`HTTP ${r.status}`);const buf=await r.arrayBuffer();await loadNsfBytes(new Uint8Array(buf),path.split("/").pop()||path)}catch(e){console.error(e);setStatus("Error cargando NSF","error");setHelp("No se pudo descargar. Si es URL externa, probablemente sea CORS. Impórtala con el workflow o usa un archivo local.","error")}}
-async function loadFromUrl(){const path=extractUrlOrPath(nsfUrlInput.value);if(!path){setStatus("No encontré URL/ruta","error");setHelp("Pega una URL directa o ruta relativa como nsf/demo.nsf.","error");return}await fetchAndLoad(path)}
-async function loadFromFile(){const f=fileInput.files?.[0];if(!f)return;try{const buf=await f.arrayBuffer();await loadNsfBytes(new Uint8Array(buf),f.name)}catch(e){console.error(e);setStatus("Error leyendo archivo","error");setHelp("No se pudo leer el archivo local.","error")}}
-async function loadNsfBytes(bytes,name){stopPlayback(false);try{currentInfo=parseNsfHeader(bytes)}catch(e){setStatus("NSF inválido","error");setHelp(e.message,"error");return}currentBytes=bytes;currentName=name;updateMetadata();setStatus("NSF cargado","");setHelp("NSF cargado. Elige un track y presiona Play.","ok")}
-async function ensureAudio(){if(!window.Module||!Module.ccall||!Module.allocate)throw new Error("No se cargó libgme.js. Revisa conexión/CDN o descarga la librería al repo.");if(!audioCtx){audioCtx=new AudioContext();masterGain=audioCtx.createGain();masterGain.gain.value=Number(volume.value);processor=audioCtx.createScriptProcessor(frameSize,0,2);processor.onaudioprocess=processAudio;analyserSource=audioCtx.createGain();[450,900,260,1800,1000].forEach((freq,i)=>{const filter=audioCtx.createBiquadFilter(),analyser=audioCtx.createAnalyser(),gain=audioCtx.createGain();filter.type=i===2?"lowpass":i===3?"highpass":i===4?"allpass":"bandpass";filter.frequency.value=freq;filter.Q.value=.9;gain.gain.value=mutedChannels[i]?0:1;analyser.fftSize=2048;analyser.smoothingTimeConstant=.72;analyserSource.connect(filter);filter.connect(analyser);filter.connect(gain);gain.connect(masterGain);channelGains.push(gain);analyzers.push({analyser,time:new Uint8Array(analyser.fftSize),freq:new Uint8Array(analyser.frequencyBinCount)})});processor.connect(analyserSource);masterGain.connect(audioCtx.destination)}if(audioCtx.state==="suspended")await audioCtx.resume();applyMuteState()}
-function openGme(track){closeGme();const ref=Module.allocate(1,"i32",Module.ALLOC_STATIC);const result=Module.ccall("gme_open_data","number",["array","number","number","number"],[currentBytes,currentBytes.length,ref,audioCtx.sampleRate]);if(result!==0)throw new Error("gme_open_data falló.");const emu=Module.getValue(ref,"i32");try{Module.ccall("gme_ignore_silence","number",["number","number"],[emu,1])}catch{}const startResult=Module.ccall("gme_start_track","number",["number","number"],[emu,track]);if(startResult!==0)throw new Error("No se pudo iniciar el track NSF.");let voiceCount=5;try{voiceCount=Module.ccall("gme_voice_count","number",["number"],[emu])||5}catch{}gme={ref,emu,voiceCount};samplePtr=Module.allocate(frameSize*2*2,"i8",Module.ALLOC_STATIC);setHelp(`NSF reproduciendo. Core reporta ${gme.voiceCount} voces. Mute aproximado por bandas, no voces internas reales.`, "ok")}
-function closeGme(){if(gme?.emu){try{Module.ccall("gme_delete","number",["number"],[gme.emu])}catch(e){console.warn(e)}}gme=null;samplePtr=0}
-function processAudio(ev){const left=ev.outputBuffer.getChannelData(0),right=ev.outputBuffer.getChannelData(1);if(!isPlaying||!gme){left.fill(0);right.fill(0);return}try{if(Module.ccall("gme_track_ended","number",["number"],[gme.emu])===1){left.fill(0);right.fill(0);stopPlayback(false);return}const err=Module.ccall("gme_play","number",["number","number","number"],[gme.emu,frameSize*2,samplePtr]);if(err!==0){left.fill(0);right.fill(0);return}const base=samplePtr>>1;for(let i=0;i<frameSize;i++){left[i]=Module.HEAP16[base+i*2]/32768;right[i]=Module.HEAP16[base+i*2+1]/32768}}catch(e){console.error(e);left.fill(0);right.fill(0)}}
-async function play(){if(!currentBytes){setStatus("No hay NSF cargado","error");return}try{await ensureAudio();openGme(currentTrack);isPlaying=true;setStatus("Reproduciendo","playing");if(!rafId)rafId=requestAnimationFrame(drawLoop)}catch(e){console.error(e);setStatus("Error reproduciendo NSF","error");setHelp(e.message,"error")}}
-function pause(){isPlaying=false;setStatus("Pausado","")}
-function stopPlayback(reset=true){isPlaying=false;closeGme();if(reset)setStatus(currentBytes?"Detenido":"Listo","")}
-function applyMuteState(){channelGains.forEach((gain,i)=>{if(audioCtx){gain.gain.setTargetAtTime(mutedChannels[i]?0:1,audioCtx.currentTime,.015)}else{gain.gain.value=mutedChannels[i]?0:1}});document.querySelectorAll("[data-mute-channel]").forEach(btn=>{const i=Number(btn.dataset.muteChannel),muted=mutedChannels[i];btn.textContent=muted?"Unmute":"Mute";btn.setAttribute("aria-pressed",muted?"true":"false");btn.closest(".channel")?.classList.toggle("muted",muted)})}
-function toggleMute(i){mutedChannels[i]=!mutedChannels[i];applyMuteState();const mutedList=mutedChannels.map((m,idx)=>m?CHANNELS[idx].name:null).filter(Boolean);setHelp(mutedList.length?`Mute aproximado activo: ${mutedList.join(", ")}.`:"Todos los canales aproximados están activos.","ok")}
-function unmuteAll(){mutedChannels.fill(false);applyMuteState();setHelp("Todos los canales aproximados están activos.","ok")}
-function drawLoop(){ctxs.forEach((ctx,i)=>{const canvas=canvases[i],a=analyzers[i],w=canvas.width,h=canvas.height,mid=h/2;ctx.clearRect(0,0,w,h);if(!a){ctx.fillStyle="rgba(255,255,255,.55)";ctx.fillText("Sin analizador",20,mid);return}a.analyser.getByteTimeDomainData(a.time);a.analyser.getByteFrequencyData(a.freq);ctx.lineWidth=2;ctx.strokeStyle=mutedChannels[i]?"rgba(255,107,107,.72)":"rgba(141,215,255,.95)";ctx.beginPath();for(let x=0;x<w;x++){const idx=Math.floor(x/w*a.time.length),y=a.time[idx]/255*h;if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke();const peak=findPeak(a.freq,audioCtx?.sampleRate||44100,a.analyser.fftSize),energy=rms(a.time);ctx.lineWidth=1.4;ctx.strokeStyle="rgba(215,166,255,.9)";ctx.beginPath();const cycles=Math.max(1,Math.min(12,peak.frequency/120)),amp=Math.min(h*.34,energy*h*1.4);for(let x=0;x<w;x++){const y=mid+Math.sin(x/w*Math.PI*2*cycles)*amp;if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke();ctx.strokeStyle="rgba(255,255,255,.18)";ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(w,mid);ctx.stroke();const state=mutedChannels[i]?"MUTE aproximado":"activo";readouts[i].textContent=`${CHANNELS[i].name} · ${state} · pico ${Math.round(peak.frequency)} Hz · energía ${(energy*100).toFixed(1)}% · ${gme?gme.voiceCount+" voces reportadas":"sin core activo"}`});rafId=requestAnimationFrame(drawLoop)}
-function findPeak(f,sr,fft){let max=0,idx=0;for(let i=1;i<f.length;i++){if(f[i]>max){max=f[i];idx=i}}return{value:max,frequency:idx*sr/fft}}
-function rms(t){let sum=0;for(const v of t){const n=(v-128)/128;sum+=n*n}return Math.sqrt(sum/t.length)}
+const canvases = ["ch0", "ch1", "ch2", "ch3", "ch4"].map(id => document.getElementById(id));
+const ctxs = canvases.map(c => c.getContext("2d"));
+const readouts = [0, 1, 2, 3, 4].map(i => document.getElementById(`readout${i}`));
 
-refreshCatalogBtn.addEventListener("click",loadCatalog);
-loadCatalogBtn.addEventListener("click",loadFromCatalog);
-loadUrlBtn.addEventListener("click",loadFromUrl);
-fileInput.addEventListener("change",loadFromFile);
-playBtn.addEventListener("click",play);
-pauseBtn.addEventListener("click",pause);
-stopBtn.addEventListener("click",()=>stopPlayback(true));
-trackSelect.addEventListener("change",()=>{currentTrack=Number(trackSelect.value);if(isPlaying)play()});
-volume.addEventListener("input",()=>{if(masterGain)masterGain.gain.value=Number(volume.value)});
-document.querySelectorAll("[data-mute-channel]").forEach(btn=>btn.addEventListener("click",()=>toggleMute(Number(btn.dataset.muteChannel))));
-unmuteAllBtn.addEventListener("click",unmuteAll);
-window.addEventListener("error",e=>{if(String(e.message||"").includes("Module")||String(e.filename||"").includes("libgme")){setStatus("Error cargando emulador","error");setHelp("No se cargó libgme.js desde el CDN. Puedes copiar libgme.js al repo y cambiar el script en index.html.","error")}});
-applyMuteState();
+const CHANNELS = [
+  { name: "Pulse 1" },
+  { name: "Pulse 2" },
+  { name: "Triangle" },
+  { name: "Noise" },
+  { name: "DPCM/Mix" }
+];
+
+let audioCtx;
+let processor;
+let masterGain;
+let analyserSource;
+let analyzers = [];
+let channelGains = [];
+let rafId = null;
+
+let currentBytes = null;
+let currentInfo = null;
+let currentName = "—";
+let gme = null;
+let samplePtr = 0;
+let frameSize = 4096;
+let isPlaying = false;
+let currentTrack = 0;
+
+const mutedChannels = [false, false, false, false, false];
+
+function setStatus(text, mode = "") {
+  statusText.textContent = text;
+  statusDot.className = mode;
+}
+
+function setHelp(text, mode = "") {
+  helpText.textContent = text;
+  helpText.className = `hint ${mode}`;
+}
+
+function setMuteMode(text) {
+  if (muteModeEl) muteModeEl.textContent = text;
+}
+
+function extractUrlOrPath(text) {
+  const trimmed = text.trim();
+  const absolute = trimmed.match(/https?:\/\/[^\s"'<>]+/i);
+  if (absolute) return absolute[0];
+
+  const relative = trimmed.match(/[A-Za-z0-9_./-]+\.(nsf|nsfe)(\?[^\s"'<>]*)?/i);
+  return relative ? relative[0] : "";
+}
+
+function readAscii(bytes, start, length) {
+  let out = "";
+  for (let i = start; i < start + length && i < bytes.length; i++) {
+    const code = bytes[i];
+    if (code === 0) break;
+    out += String.fromCharCode(code);
+  }
+  return out.trim();
+}
+
+function parseNsfHeader(bytes) {
+  const magic = readAscii(bytes, 0, 5);
+  if (magic !== "NESM\x1A") {
+    throw new Error("El archivo no parece ser NSF válido.");
+  }
+
+  return {
+    version: bytes[5],
+    songs: bytes[6],
+    startSong: bytes[7],
+    title: readAscii(bytes, 14, 32) || "Sin título",
+    artist: readAscii(bytes, 46, 32) || "Desconocido",
+    copyright: readAscii(bytes, 78, 32) || "—",
+    expansion: bytes[123]
+  };
+}
+
+async function loadCatalog() {
+  try {
+    const response = await fetch("nsf/catalog.json?cache=" + Date.now());
+    if (!response.ok) throw new Error("No catalog");
+
+    const catalog = await response.json();
+    const items = Array.isArray(catalog.items) ? catalog.items : [];
+
+    catalogSelect.innerHTML = "";
+
+    if (!items.length) {
+      catalogSelect.innerHTML = '<option value="">No hay archivos cargados</option>';
+      return;
+    }
+
+    for (const item of items) {
+      const option = document.createElement("option");
+      option.value = item.path;
+      option.textContent = `${item.title || item.filename} — ${item.artist || "Desconocido"}`;
+      catalogSelect.appendChild(option);
+    }
+
+    setHelp(`Catálogo cargado: ${items.length} archivo(s).`, "ok");
+  } catch (error) {
+    console.warn(error);
+    catalogSelect.innerHTML = '<option value="">No hay catálogo disponible</option>';
+    setHelp("No se pudo cargar nsf/catalog.json. Ejecuta el workflow de importación o sube archivos manualmente.", "error");
+  }
+}
+
+async function loadFromCatalog() {
+  const path = catalogSelect.value;
+  if (!path) {
+    setStatus("No hay NSF seleccionado", "error");
+    return;
+  }
+  await fetchAndLoad(path);
+}
+
+function updateMetadata() {
+  fileNameEl.textContent = currentName;
+  songTitleEl.textContent = currentInfo?.title || "—";
+  artistEl.textContent = currentInfo?.artist || "—";
+  songCountEl.textContent = currentInfo?.songs ? String(currentInfo.songs) : "—";
+
+  trackSelect.innerHTML = "";
+  const count = currentInfo?.songs || 1;
+  const start = Math.max(1, currentInfo?.startSong || 1);
+
+  for (let i = 0; i < count; i++) {
+    const option = document.createElement("option");
+    option.value = String(i);
+    option.textContent = `Track ${i + 1}`;
+    if (i === start - 1) option.selected = true;
+    trackSelect.appendChild(option);
+  }
+
+  currentTrack = Math.max(0, start - 1);
+  trackSelect.value = String(currentTrack);
+  trackSelect.disabled = false;
+  playBtn.disabled = false;
+  pauseBtn.disabled = false;
+  stopBtn.disabled = false;
+}
+
+async function fetchAndLoad(path) {
+  setStatus("Cargando NSF...", "");
+  setHelp("Descargando archivo NSF.", "");
+
+  try {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const buffer = await response.arrayBuffer();
+    await loadNsfBytes(new Uint8Array(buffer), path.split("/").pop() || path);
+  } catch (error) {
+    console.error(error);
+    setStatus("Error cargando NSF", "error");
+    setHelp("No se pudo descargar. Si es URL externa, probablemente sea CORS. Impórtala con el workflow o usa un archivo local.", "error");
+  }
+}
+
+async function loadFromUrl() {
+  const path = extractUrlOrPath(nsfUrlInput.value);
+
+  if (!path) {
+    setStatus("No encontré URL/ruta", "error");
+    setHelp("Pega una URL directa o ruta relativa como nsf/demo.nsf.", "error");
+    return;
+  }
+
+  await fetchAndLoad(path);
+}
+
+async function loadFromFile() {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+
+  try {
+    const buffer = await file.arrayBuffer();
+    await loadNsfBytes(new Uint8Array(buffer), file.name);
+  } catch (error) {
+    console.error(error);
+    setStatus("Error leyendo archivo", "error");
+    setHelp("No se pudo leer el archivo local.", "error");
+  }
+}
+
+async function loadNsfBytes(bytes, name) {
+  stopPlayback(false);
+
+  try {
+    currentInfo = parseNsfHeader(bytes);
+  } catch (error) {
+    setStatus("NSF inválido", "error");
+    setHelp(error.message, "error");
+    return;
+  }
+
+  currentBytes = bytes;
+  currentName = name;
+  mutedChannels.fill(false);
+  updateMuteUIOnly();
+  applyApproxMuteState();
+
+  updateMetadata();
+  setStatus("NSF cargado", "");
+  setHelp("NSF cargado. Elige un track y presiona Play.", "ok");
+}
+
+async function ensureAudio() {
+  if (!window.Module || !Module.ccall || !Module._malloc || !Module._free) {
+    throw new Error("No se cargó vendor/libgme.js. Ejecuta el workflow Build libgme for browser o revisa la ruta vendor/libgme.js.");
+  }
+
+  if (!audioCtx) {
+    audioCtx = new AudioContext();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = Number(volume.value);
+
+    processor = audioCtx.createScriptProcessor(frameSize, 0, 2);
+    processor.onaudioprocess = processAudio;
+
+    analyserSource = audioCtx.createGain();
+
+    [450, 900, 260, 1800, 1000].forEach((freq, index) => {
+      const filter = audioCtx.createBiquadFilter();
+      const analyser = audioCtx.createAnalyser();
+      const gain = audioCtx.createGain();
+
+      filter.type = index === 2 ? "lowpass" : index === 3 ? "highpass" : index === 4 ? "allpass" : "bandpass";
+      filter.frequency.value = freq;
+      filter.Q.value = 0.9;
+
+      gain.gain.value = mutedChannels[index] ? 0 : 1;
+
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.72;
+
+      analyserSource.connect(filter);
+      filter.connect(analyser);
+      filter.connect(gain);
+      gain.connect(masterGain);
+
+      channelGains.push(gain);
+      analyzers.push({
+        analyser,
+        time: new Uint8Array(analyser.fftSize),
+        freq: new Uint8Array(analyser.frequencyBinCount)
+      });
+    });
+
+    processor.connect(analyserSource);
+    masterGain.connect(audioCtx.destination);
+  }
+
+  if (audioCtx.state === "suspended") {
+    await audioCtx.resume();
+  }
+
+  applyApproxMuteState();
+  updateMuteMode();
+}
+
+function hasRealMute() {
+  return typeof Module !== "undefined" && typeof Module._gme_mute_voice === "function";
+}
+
+function setRealMute(channelIndex, muted) {
+  if (!gme || !gme.emu || !hasRealMute()) {
+    return false;
+  }
+
+  Module.ccall(
+    "gme_mute_voice",
+    "void",
+    ["number", "number", "number"],
+    [gme.emu, channelIndex, muted ? 1 : 0]
+  );
+
+  return true;
+}
+
+function updateMuteMode() {
+  setMuteMode(hasRealMute() ? "Real disponible" : "Fallback aproximado");
+}
+
+function openGme(track) {
+  closeGme();
+
+  const ref = Module._malloc(4);
+
+  const result = Module.ccall(
+    "gme_open_data",
+    "number",
+    ["array", "number", "number", "number"],
+    [currentBytes, currentBytes.length, ref, audioCtx.sampleRate]
+  );
+
+  if (result !== 0) {
+    Module._free(ref);
+    throw new Error("gme_open_data falló.");
+  }
+
+  const emu = Module.getValue(ref, "i32");
+
+  try {
+    Module.ccall("gme_ignore_silence", "number", ["number", "number"], [emu, 1]);
+  } catch {}
+
+  const startResult = Module.ccall(
+    "gme_start_track",
+    "number",
+    ["number", "number"],
+    [emu, track]
+  );
+
+  if (startResult !== 0) {
+    Module.ccall("gme_delete", "number", ["number"], [emu]);
+    Module._free(ref);
+    throw new Error("No se pudo iniciar el track NSF.");
+  }
+
+  let voiceCount = 5;
+  try {
+    voiceCount = Module.ccall("gme_voice_count", "number", ["number"], [emu]) || 5;
+  } catch {}
+
+  samplePtr = Module._malloc(frameSize * 2 * 2);
+  gme = { ref, emu, voiceCount };
+
+  mutedChannels.forEach((muted, index) => {
+    if (muted) setRealMute(index, true);
+  });
+
+  updateMuteMode();
+
+  if (hasRealMute()) {
+    setHelp(`NSF reproduciendo. Core reporta ${gme.voiceCount} voces. Mute real disponible.`, "ok");
+  } else {
+    setHelp(`NSF reproduciendo. Core reporta ${gme.voiceCount} voces. gme_mute_voice no está disponible; usando fallback aproximado por bandas.`, "ok");
+  }
+}
+
+function closeGme() {
+  if (gme?.emu) {
+    try {
+      Module.ccall("gme_delete", "number", ["number"], [gme.emu]);
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  if (gme?.ref) {
+    try {
+      Module._free(gme.ref);
+    } catch {}
+  }
+
+  if (samplePtr) {
+    try {
+      Module._free(samplePtr);
+    } catch {}
+  }
+
+  gme = null;
+  samplePtr = 0;
+}
+
+function processAudio(event) {
+  const left = event.outputBuffer.getChannelData(0);
+  const right = event.outputBuffer.getChannelData(1);
+
+  if (!isPlaying || !gme) {
+    left.fill(0);
+    right.fill(0);
+    return;
+  }
+
+  try {
+    if (Module.ccall("gme_track_ended", "number", ["number"], [gme.emu]) === 1) {
+      left.fill(0);
+      right.fill(0);
+      stopPlayback(false);
+      return;
+    }
+
+    const err = Module.ccall(
+      "gme_play",
+      "number",
+      ["number", "number", "number"],
+      [gme.emu, frameSize * 2, samplePtr]
+    );
+
+    if (err !== 0) {
+      left.fill(0);
+      right.fill(0);
+      return;
+    }
+
+    const base = samplePtr >> 1;
+
+    for (let i = 0; i < frameSize; i++) {
+      left[i] = Module.HEAP16[base + i * 2] / 32768;
+      right[i] = Module.HEAP16[base + i * 2 + 1] / 32768;
+    }
+  } catch (error) {
+    console.error(error);
+    left.fill(0);
+    right.fill(0);
+  }
+}
+
+async function play() {
+  if (!currentBytes) {
+    setStatus("No hay NSF cargado", "error");
+    return;
+  }
+
+  try {
+    await ensureAudio();
+    openGme(currentTrack);
+    isPlaying = true;
+    setStatus("Reproduciendo", "playing");
+
+    if (!rafId) {
+      rafId = requestAnimationFrame(drawLoop);
+    }
+  } catch (error) {
+    console.error(error);
+    setStatus("Error reproduciendo NSF", "error");
+    setHelp(error.message, "error");
+  }
+}
+
+function pause() {
+  isPlaying = false;
+  setStatus("Pausado", "");
+}
+
+function stopPlayback(resetStatus = true) {
+  isPlaying = false;
+  closeGme();
+
+  if (resetStatus) {
+    setStatus(currentBytes ? "Detenido" : "Listo", "");
+  }
+}
+
+function applyApproxMuteState() {
+  channelGains.forEach((gain, index) => {
+    const value = mutedChannels[index] ? 0 : 1;
+
+    if (audioCtx) {
+      gain.gain.setTargetAtTime(value, audioCtx.currentTime, 0.015);
+    } else {
+      gain.gain.value = value;
+    }
+  });
+
+  updateMuteUIOnly();
+}
+
+function updateMuteUIOnly() {
+  document.querySelectorAll("[data-mute-channel]").forEach(button => {
+    const index = Number(button.dataset.muteChannel);
+    const muted = mutedChannels[index];
+
+    button.textContent = muted ? "Unmute" : "Mute";
+    button.setAttribute("aria-pressed", muted ? "true" : "false");
+    button.closest(".channel")?.classList.toggle("muted", muted);
+  });
+}
+
+function toggleMute(index) {
+  mutedChannels[index] = !mutedChannels[index];
+
+  const realMuteWorked = setRealMute(index, mutedChannels[index]);
+
+  if (realMuteWorked) {
+    updateMuteUIOnly();
+
+    const mutedList = mutedChannels
+      .map((muted, channelIndex) => muted ? CHANNELS[channelIndex].name : null)
+      .filter(Boolean);
+
+    setHelp(
+      mutedList.length
+        ? `Mute real activo: ${mutedList.join(", ")}.`
+        : "Todos los canales reales están activos.",
+      "ok"
+    );
+
+    return;
+  }
+
+  applyApproxMuteState();
+
+  const mutedList = mutedChannels
+    .map((muted, channelIndex) => muted ? CHANNELS[channelIndex].name : null)
+    .filter(Boolean);
+
+  setHelp(
+    mutedList.length
+      ? `Mute aproximado activo: ${mutedList.join(", ")}. gme_mute_voice no está disponible.`
+      : "Todos los canales aproximados están activos.",
+    "ok"
+  );
+}
+
+function unmuteAll() {
+  mutedChannels.fill(false);
+
+  if (gme && gme.emu && hasRealMute()) {
+    CHANNELS.forEach((_, index) => {
+      Module.ccall(
+        "gme_mute_voice",
+        "void",
+        ["number", "number", "number"],
+        [gme.emu, index, 0]
+      );
+    });
+
+    updateMuteUIOnly();
+    setHelp("Todos los canales reales están activos.", "ok");
+    return;
+  }
+
+  applyApproxMuteState();
+  setHelp("Todos los canales aproximados están activos.", "ok");
+}
+
+function drawLoop() {
+  ctxs.forEach((ctx, index) => {
+    const canvas = canvases[index];
+    const analyzerPack = analyzers[index];
+    const w = canvas.width;
+    const h = canvas.height;
+    const mid = h / 2;
+
+    ctx.clearRect(0, 0, w, h);
+
+    if (!analyzerPack) {
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.fillText("Sin analizador", 20, mid);
+      return;
+    }
+
+    analyzerPack.analyser.getByteTimeDomainData(analyzerPack.time);
+    analyzerPack.analyser.getByteFrequencyData(analyzerPack.freq);
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = mutedChannels[index] ? "rgba(255,107,107,0.72)" : "rgba(141,215,255,0.95)";
+    ctx.beginPath();
+
+    for (let x = 0; x < w; x++) {
+      const dataIndex = Math.floor((x / w) * analyzerPack.time.length);
+      const y = (analyzerPack.time[dataIndex] / 255) * h;
+
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    ctx.stroke();
+
+    const peak = findPeak(analyzerPack.freq, audioCtx?.sampleRate || 44100, analyzerPack.analyser.fftSize);
+    const energy = rms(analyzerPack.time);
+
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = "rgba(215,166,255,0.9)";
+    ctx.beginPath();
+
+    const cycles = Math.max(1, Math.min(12, peak.frequency / 120));
+    const amp = Math.min(h * 0.34, energy * h * 1.4);
+
+    for (let x = 0; x < w; x++) {
+      const y = mid + Math.sin((x / w) * Math.PI * 2 * cycles) * amp;
+
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath();
+    ctx.moveTo(0, mid);
+    ctx.lineTo(w, mid);
+    ctx.stroke();
+
+    const muteState = mutedChannels[index] ? "muteado" : "activo";
+    const mode = hasRealMute() ? "real" : "aprox";
+
+    readouts[index].textContent =
+      `${CHANNELS[index].name} · ${muteState} (${mode}) · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+  });
+
+  rafId = requestAnimationFrame(drawLoop);
+}
+
+function findPeak(freqData, sampleRate, fftSize) {
+  let max = 0;
+  let maxIndex = 0;
+
+  for (let i = 1; i < freqData.length; i++) {
+    if (freqData[i] > max) {
+      max = freqData[i];
+      maxIndex = i;
+    }
+  }
+
+  return {
+    value: max,
+    frequency: maxIndex * sampleRate / fftSize
+  };
+}
+
+function rms(timeData) {
+  let sum = 0;
+
+  for (const value of timeData) {
+    const normalized = (value - 128) / 128;
+    sum += normalized * normalized;
+  }
+
+  return Math.sqrt(sum / timeData.length);
+}
+
+refreshCatalogBtn.addEventListener("click", loadCatalog);
+loadCatalogBtn.addEventListener("click", loadFromCatalog);
+loadUrlBtn.addEventListener("click", loadFromUrl);
+fileInput.addEventListener("change", loadFromFile);
+playBtn.addEventListener("click", play);
+pauseBtn.addEventListener("click", pause);
+stopBtn.addEventListener("click", () => stopPlayback(true));
+
+trackSelect.addEventListener("change", () => {
+  currentTrack = Number(trackSelect.value);
+  if (isPlaying) play();
+});
+
+volume.addEventListener("input", () => {
+  if (masterGain) masterGain.gain.value = Number(volume.value);
+});
+
+document.querySelectorAll("[data-mute-channel]").forEach(button => {
+  button.addEventListener("click", () => toggleMute(Number(button.dataset.muteChannel)));
+});
+
+unmuteAllBtn.addEventListener("click", unmuteAll);
+
+window.addEventListener("error", event => {
+  const message = String(event.message || "");
+  const filename = String(event.filename || "");
+
+  if (message.includes("Module") || filename.includes("libgme")) {
+    setStatus("Error cargando emulador", "error");
+    setHelp("No se cargó vendor/libgme.js. Ejecuta el workflow Build libgme for browser y confirma que vendor/libgme.js/vendor/libgme.wasm existan.", "error");
+  }
+});
+
+setMuteMode("Esperando libgme");
+updateMuteUIOnly();
 loadCatalog();

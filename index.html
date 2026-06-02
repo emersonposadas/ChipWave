@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ChipWave NSF Catalog Visualizer</title>
+  <title>ChipWave NSF Visualizer</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div>
-        <p class="eyebrow">GitHub Pages / NSF / GitHub Actions</p>
+        <p class="eyebrow">GitHub Pages / NSF / Real Mute</p>
         <h1>ChipWave NSF Visualizer</h1>
         <p class="subtitle">
           Usa archivos NSF importados por workflow, URLs directas o archivos locales. La reproducción y visualización se procesan en tu navegador.
@@ -25,7 +25,7 @@
     <section class="panel">
       <h2>Catálogo NSF del repo</h2>
       <p class="hint">
-        Estos archivos viven dentro de <code>nsf/</code>. El workflow los descarga y actualiza <code>nsf/catalog.json</code>.
+        Estos archivos viven dentro de <code>nsf/</code>. El workflow de importación los descarga y actualiza <code>nsf/catalog.json</code>.
       </p>
 
       <div class="controls">
@@ -79,17 +79,18 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
         <p><strong>Título NSF:</strong> <span id="songTitle">—</span></p>
         <p><strong>Artista:</strong> <span id="artist">—</span></p>
         <p><strong>Canciones:</strong> <span id="songCount">—</span></p>
+        <p><strong>Modo mute:</strong> <span id="muteMode">—</span></p>
       </div>
 
       <p class="hint" id="helpText">
-        Los botones Mute son aproximados: silencian bandas filtradas del audio mezclado, no voces internas reales del NSF.
+        Para mute real, ejecuta el workflow “Build libgme for browser” y asegúrate de tener <code>vendor/libgme.js</code> y <code>vendor/libgme.wasm</code>.
       </p>
     </section>
 
     <section class="visualizers">
       <article class="channel" data-channel="0">
         <div class="channelHead">
-          <div><h2>Pulse 1</h2><span>Canal cuadrado 1 estimado</span></div>
+          <div><h2>Pulse 1</h2><span>Canal cuadrado 1</span></div>
           <button class="muteBtn" type="button" data-mute-channel="0" aria-pressed="false">Mute</button>
         </div>
         <canvas id="ch0" width="1200" height="260"></canvas>
@@ -98,7 +99,7 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
 
       <article class="channel" data-channel="1">
         <div class="channelHead">
-          <div><h2>Pulse 2</h2><span>Canal cuadrado 2 estimado</span></div>
+          <div><h2>Pulse 2</h2><span>Canal cuadrado 2</span></div>
           <button class="muteBtn" type="button" data-mute-channel="1" aria-pressed="false">Mute</button>
         </div>
         <canvas id="ch1" width="1200" height="260"></canvas>
@@ -107,7 +108,7 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
 
       <article class="channel" data-channel="2">
         <div class="channelHead">
-          <div><h2>Triangle</h2><span>Bajo / melodía triangular estimada</span></div>
+          <div><h2>Triangle</h2><span>Bajo / melodía triangular</span></div>
           <button class="muteBtn" type="button" data-mute-channel="2" aria-pressed="false">Mute</button>
         </div>
         <canvas id="ch2" width="1200" height="260"></canvas>
@@ -116,7 +117,7 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
 
       <article class="channel" data-channel="3">
         <div class="channelHead">
-          <div><h2>Noise</h2><span>Percusión / ruido estimado</span></div>
+          <div><h2>Noise</h2><span>Percusión / ruido</span></div>
           <button class="muteBtn" type="button" data-mute-channel="3" aria-pressed="false">Mute</button>
         </div>
         <canvas id="ch3" width="1200" height="260"></canvas>
@@ -125,7 +126,7 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
 
       <article class="channel wide" data-channel="4">
         <div class="channelHead">
-          <div><h2>DPCM / Mix</h2><span>Samples o mezcla final estimada</span></div>
+          <div><h2>DPCM / Mix</h2><span>Samples o mezcla final</span></div>
           <button class="muteBtn" type="button" data-mute-channel="4" aria-pressed="false">Mute</button>
         </div>
         <canvas id="ch4" width="1200" height="260"></canvas>
@@ -136,14 +137,18 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
     <section class="panel notes">
       <h2>Dónde se procesa el NSF</h2>
       <p>
-        GitHub Actions solo descarga el archivo y lo guarda en <code>nsf/</code>. El análisis ocurre en el navegador:
-        la app hace <code>fetch()</code> del NSF, lee los bytes, parsea el header, pasa el archivo al emulador
-        <code>Game_Music_Emu</code> compilado a JavaScript y renderiza audio con Web Audio API.
+        GitHub Actions solo descarga archivos NSF o compila el emulador. El análisis ocurre en el navegador:
+        la app hace <code>fetch()</code> del NSF, lee los bytes, parsea el header, pasa el archivo a
+        <code>Game_Music_Emu</code> y renderiza audio con Web Audio API.
+      </p>
+      <p>
+        Si <code>gme_mute_voice</code> está disponible en <code>vendor/libgme.js</code>, los botones usan mute real.
+        Si no está disponible, la app usa fallback aproximado por bandas.
       </p>
     </section>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/gh/okaybenji/nsf-player@master/libgme/libgme.js"></script>
+  <script src="vendor/libgme.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
