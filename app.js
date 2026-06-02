@@ -20,6 +20,7 @@ const loadCatalogBtn = document.getElementById("loadCatalogBtn");
 const refreshCatalogBtn = document.getElementById("refreshCatalogBtn");
 const unmuteAllBtn = document.getElementById("unmuteAllBtn");
 const waveCyclesSelect = document.getElementById("waveCycles");
+const waveStaticToggle = document.getElementById("waveStatic");
 
 const canvases = ["ch0", "ch1", "ch2", "ch3", "ch4"].map(id => document.getElementById(id));
 const ctxs = canvases.map(c => c.getContext("2d"));
@@ -55,6 +56,7 @@ let lastGmeError = 0;
 const mutedChannels = [false, false, false, false, false];
 
 let waveCyclesToShow = Number(waveCyclesSelect?.value || 3);
+let waveStaticEnabled = Boolean(waveStaticToggle?.checked);
 
 let gmeRuntimeReadyPromise = null;
 
@@ -695,7 +697,9 @@ function drawLoop() {
     const cyclesToShow = waveCyclesToShow || 3;
     const samplesPerCycle = peak.frequency > 0 ? sampleRate / peak.frequency : analyzerPack.time.length;
     const visibleSamples = Math.max(16, Math.min(analyzerPack.time.length, Math.round(samplesPerCycle * cyclesToShow)));
-    const startSample = Math.max(0, analyzerPack.time.length - visibleSamples);
+    const startSample = waveStaticEnabled
+      ? findStableWaveStart(analyzerPack.time, visibleSamples)
+      : Math.max(0, analyzerPack.time.length - visibleSamples);
 
     ctx.lineWidth = 2;
     ctx.strokeStyle = mutedChannels[index] ? "rgba(255,107,107,0.72)" : "rgba(141,215,255,0.95)";
@@ -740,11 +744,38 @@ function drawLoop() {
     const muteState = mutedChannels[index] ? "muteado" : "activo";
     const mode = hasRealMute() ? "real" : "aprox";
 
+    const waveMode = waveStaticEnabled ? "estática" : "dinámica";
+
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · PCM ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · PCM ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
+}
+
+function findStableWaveStart(timeData, visibleSamples) {
+  const maxStart = Math.max(0, timeData.length - visibleSamples);
+
+  if (maxStart <= 1) return 0;
+
+  let average = 0;
+  for (const value of timeData) average += value;
+  average /= timeData.length || 1;
+
+  const threshold = Number.isFinite(average) ? average : 128;
+  const minStep = 2;
+
+  for (let i = minStep; i < maxStart; i++) {
+    const previous = timeData[i - 1];
+    const current = timeData[i];
+    const hasRisingCrossing = previous < threshold && current >= threshold;
+
+    if (hasRisingCrossing) {
+      return Math.max(0, i - minStep);
+    }
+  }
+
+  return Math.max(0, Math.floor(maxStart / 2));
 }
 
 function findPeak(freqData, sampleRate, fftSize) {
@@ -794,6 +825,10 @@ volume.addEventListener("input", () => {
 
 waveCyclesSelect?.addEventListener("change", () => {
   waveCyclesToShow = Number(waveCyclesSelect.value) || 3;
+});
+
+waveStaticToggle?.addEventListener("change", () => {
+  waveStaticEnabled = waveStaticToggle.checked;
 });
 
 document.querySelectorAll("[data-mute-channel]").forEach(button => {

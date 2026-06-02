@@ -115,7 +115,7 @@ textarea {
   outline: none;
 }
 
-textarea:focus, input[type="range"]:focus, select:focus { border-color: var(--accent); }
+textarea:focus, input[type="range"]:focus, input[type="checkbox"]:focus, select:focus { border-color: var(--accent); }
 
 .controls {
   display: flex;
@@ -125,7 +125,7 @@ textarea:focus, input[type="range"]:focus, select:focus { border-color: var(--ac
   margin-top: 14px;
 }
 
-button, .fileLabel, select {
+button, .fileLabel, select, .waveStatic {
   border: 1px solid var(--line);
   background: #1d2740;
   color: var(--text);
@@ -137,7 +137,7 @@ button, .fileLabel, select {
 
 select { max-width: min(520px, 90vw); }
 
-button:hover, .fileLabel:hover, select:hover { border-color: var(--accent); }
+button:hover, .fileLabel:hover, select:hover, .waveStatic:hover { border-color: var(--accent); }
 
 button:disabled, select:disabled {
   opacity: 0.45;
@@ -154,6 +154,13 @@ button:disabled, select:disabled {
 }
 
 .waveCycles select { min-width: 72px; }
+
+.waveStatic input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.waveStatic { user-select: none; }
 
 .hint {
   color: var(--muted);
