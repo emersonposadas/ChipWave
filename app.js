@@ -47,6 +47,8 @@ let samplePtr = 0;
 let frameSize = 4096;
 let isPlaying = false;
 let currentTrack = 0;
+let lastPcmPeak = 0;
+let lastGmeError = 0;
 
 const mutedChannels = [false, false, false, false, false];
 
@@ -259,7 +261,7 @@ async function loadNsfBytes(bytes, name) {
 async function ensureAudio() {
   await waitForGmeRuntime();
 
-  if (!window.Module || !Module.ccall || !Module._malloc || !Module._free) {
+  if (!window.Module || !Module.ccall || !Module._malloc || !Module._free || !Module.HEAPU8 || !Module.HEAP16) {
     throw new Error("No se cargó vendor/libgme.js correctamente. Ejecuta el workflow Build libgme for browser o revisa vendor/libgme.js/vendor/libgme.wasm.");
   }
 
@@ -346,16 +348,26 @@ function openGme(track) {
   closeGme();
 
   const ref = Module._malloc(4);
+  const dataPtr = Module._malloc(currentBytes.length);
+
+  if (!ref || !dataPtr) {
+    if (ref) Module._free(ref);
+    if (dataPtr) Module._free(dataPtr);
+    throw new Error("No se pudo reservar memoria WASM para el NSF.");
+  }
+
+  Module.HEAPU8.set(currentBytes, dataPtr);
 
   const result = Module.ccall(
     "gme_open_data",
     "number",
-    ["array", "number", "number", "number"],
-    [currentBytes, currentBytes.length, ref, audioCtx.sampleRate]
+    ["number", "number", "number", "number"],
+    [dataPtr, currentBytes.length, ref, audioCtx.sampleRate]
   );
 
   if (result !== 0) {
     Module._free(ref);
+    Module._free(dataPtr);
     throw new Error("gme_open_data falló.");
   }
 
@@ -375,6 +387,7 @@ function openGme(track) {
   if (startResult !== 0) {
     Module.ccall("gme_delete", "number", ["number"], [emu]);
     Module._free(ref);
+    Module._free(dataPtr);
     throw new Error("No se pudo iniciar el track NSF.");
   }
 
@@ -384,7 +397,15 @@ function openGme(track) {
   } catch {}
 
   samplePtr = Module._malloc(frameSize * 2 * 2);
-  gme = { ref, emu, voiceCount };
+
+  if (!samplePtr) {
+    Module.ccall("gme_delete", "number", ["number"], [emu]);
+    Module._free(ref);
+    Module._free(dataPtr);
+    throw new Error("No se pudo reservar memoria WASM para audio PCM.");
+  }
+
+  gme = { ref, emu, voiceCount, dataPtr };
 
   mutedChannels.forEach((muted, index) => {
     if (muted) setRealMute(index, true);
@@ -395,7 +416,7 @@ function openGme(track) {
   if (hasRealMute()) {
     setHelp(`NSF reproduciendo. Core reporta ${gme.voiceCount} voces. Mute real disponible.`, "ok");
   } else {
-    setHelp(`NSF reproduciendo. Core reporta ${gme.voiceCount} voces. gme_mute_voice no está disponible; usando fallback aproximado por bandas.`, "ok");
+    setHelp(`NSF reproduciendo. Core reporta ${gme.voiceCount} voces. gme_mute_voice no está disponible; usando fallback visual aproximado.`, "ok");
   }
 }
 
@@ -409,15 +430,15 @@ function closeGme() {
   }
 
   if (gme?.ref) {
-    try {
-      Module._free(gme.ref);
-    } catch {}
+    try { Module._free(gme.ref); } catch {}
+  }
+
+  if (gme?.dataPtr) {
+    try { Module._free(gme.dataPtr); } catch {}
   }
 
   if (samplePtr) {
-    try {
-      Module._free(samplePtr);
-    } catch {}
+    try { Module._free(samplePtr); } catch {}
   }
 
   gme = null;
@@ -449,6 +470,8 @@ function processAudio(event) {
       [gme.emu, frameSize * 2, samplePtr]
     );
 
+    lastGmeError = err;
+
     if (err !== 0) {
       left.fill(0);
       right.fill(0);
@@ -456,11 +479,20 @@ function processAudio(event) {
     }
 
     const base = samplePtr >> 1;
+    let peak = 0;
 
     for (let i = 0; i < frameSize; i++) {
-      left[i] = Module.HEAP16[base + i * 2] / 32768;
-      right[i] = Module.HEAP16[base + i * 2 + 1] / 32768;
+      const l = Module.HEAP16[base + i * 2] / 32768;
+      const r = Module.HEAP16[base + i * 2 + 1] / 32768;
+
+      left[i] = l;
+      right[i] = r;
+
+      const abs = Math.max(Math.abs(l), Math.abs(r));
+      if (abs > peak) peak = abs;
     }
+
+    lastPcmPeak = peak;
   } catch (error) {
     console.error(error);
     left.fill(0);
@@ -649,7 +681,7 @@ function drawLoop() {
     const mode = hasRealMute() ? "real" : "aprox";
 
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} (${mode}) · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+      `${CHANNELS[index].name} · ${muteState} (${mode}) · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · PCM ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
