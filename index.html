@@ -71,6 +71,16 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
           <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" />
         </label>
 
+        <label class="trackLabel waveCycles">
+          Ciclos visibles
+          <select id="waveCycles" aria-label="Ciclos visibles en la onda">
+            <option value="1">1</option>
+            <option value="3" selected>3</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+          </select>
+        </label>
+
         <button id="unmuteAllBtn" type="button">Unmute all</button>
       </div>
 
@@ -149,7 +159,7 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
   </main>
 
   <script>
-    window.__chipwaveBuild = "v9-2026-06-02";
+    window.__chipwaveBuild = "v10-2026-06-02";
     window.__gmeRuntimeReady = new Promise((resolve, reject) => {
       window.__resolveGmeRuntime = resolve;
       window.__rejectGmeRuntime = reject;
@@ -175,7 +185,7 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
     };
   </script>
   <script>
-    window.__chipwaveBuild = "v9-2026-06-02";
+    window.__chipwaveBuild = "v10-2026-06-02";
     window.__gmeRuntimeReady = new Promise((resolve, reject) => {
       window.__resolveGmeRuntime = resolve;
       window.__rejectGmeRuntime = reject;

@@ -153,6 +153,8 @@ button:disabled, select:disabled {
   margin: 0;
 }
 
+.waveCycles select { min-width: 72px; }
+
 .hint {
   color: var(--muted);
   margin: 12px 0 0;

@@ -1,4 +1,4 @@
-console.log("ChipWave app build v9 loaded");
+console.log("ChipWave app build v10 loaded");
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -19,6 +19,7 @@ const catalogSelect = document.getElementById("catalogSelect");
 const loadCatalogBtn = document.getElementById("loadCatalogBtn");
 const refreshCatalogBtn = document.getElementById("refreshCatalogBtn");
 const unmuteAllBtn = document.getElementById("unmuteAllBtn");
+const waveCyclesSelect = document.getElementById("waveCycles");
 
 const canvases = ["ch0", "ch1", "ch2", "ch3", "ch4"].map(id => document.getElementById(id));
 const ctxs = canvases.map(c => c.getContext("2d"));
@@ -52,6 +53,8 @@ let lastPcmPeak = 0;
 let lastGmeError = 0;
 
 const mutedChannels = [false, false, false, false, false];
+
+let waveCyclesToShow = Number(waveCyclesSelect?.value || 3);
 
 let gmeRuntimeReadyPromise = null;
 
@@ -686,13 +689,25 @@ function drawLoop() {
     analyzerPack.analyser.getByteTimeDomainData(analyzerPack.time);
     analyzerPack.analyser.getByteFrequencyData(analyzerPack.freq);
 
+    const peak = findPeak(analyzerPack.freq, audioCtx?.sampleRate || 44100, analyzerPack.analyser.fftSize);
+    const energy = rms(analyzerPack.time);
+    const sampleRate = audioCtx?.sampleRate || 44100;
+    const cyclesToShow = waveCyclesToShow || 3;
+    const samplesPerCycle = peak.frequency > 0 ? sampleRate / peak.frequency : analyzerPack.time.length;
+    const visibleSamples = Math.max(16, Math.min(analyzerPack.time.length, Math.round(samplesPerCycle * cyclesToShow)));
+    const startSample = Math.max(0, analyzerPack.time.length - visibleSamples);
+
     ctx.lineWidth = 2;
     ctx.strokeStyle = mutedChannels[index] ? "rgba(255,107,107,0.72)" : "rgba(141,215,255,0.95)";
     ctx.beginPath();
 
     for (let x = 0; x < w; x++) {
-      const dataIndex = Math.floor((x / w) * analyzerPack.time.length);
-      const y = (analyzerPack.time[dataIndex] / 255) * h;
+      const sourcePosition = startSample + (x / Math.max(1, w - 1)) * Math.max(1, visibleSamples - 1);
+      const dataIndex = Math.min(analyzerPack.time.length - 1, Math.floor(sourcePosition));
+      const nextIndex = Math.min(analyzerPack.time.length - 1, dataIndex + 1);
+      const mix = sourcePosition - dataIndex;
+      const value = analyzerPack.time[dataIndex] * (1 - mix) + analyzerPack.time[nextIndex] * mix;
+      const y = (value / 255) * h;
 
       if (x === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
@@ -700,14 +715,11 @@ function drawLoop() {
 
     ctx.stroke();
 
-    const peak = findPeak(analyzerPack.freq, audioCtx?.sampleRate || 44100, analyzerPack.analyser.fftSize);
-    const energy = rms(analyzerPack.time);
-
     ctx.lineWidth = 1.4;
     ctx.strokeStyle = "rgba(215,166,255,0.9)";
     ctx.beginPath();
 
-    const cycles = Math.max(1, Math.min(12, peak.frequency / 120));
+    const cycles = cyclesToShow;
     const amp = Math.min(h * 0.34, energy * h * 1.4);
 
     for (let x = 0; x < w; x++) {
@@ -729,7 +741,7 @@ function drawLoop() {
     const mode = hasRealMute() ? "real" : "aprox";
 
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} (${mode}) · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · PCM ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · PCM ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
@@ -778,6 +790,10 @@ trackSelect.addEventListener("change", () => {
 
 volume.addEventListener("input", () => {
   if (masterGain) masterGain.gain.value = Number(volume.value);
+});
+
+waveCyclesSelect?.addEventListener("change", () => {
+  waveCyclesToShow = Number(waveCyclesSelect.value) || 3;
 });
 
 document.querySelectorAll("[data-mute-channel]").forEach(button => {
