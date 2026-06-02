@@ -70,6 +70,8 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
           Volumen
           <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" />
         </label>
+
+        <button id="unmuteAllBtn" type="button">Unmute all</button>
       </div>
 
       <div class="meta">
@@ -80,37 +82,52 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
       </div>
 
       <p class="hint" id="helpText">
-        Para URLs externas, CORS puede bloquear la descarga. Para evitarlo, importa el archivo con GitHub Actions y úsalo desde el catálogo.
+        Los botones Mute son aproximados: silencian bandas filtradas del audio mezclado, no voces internas reales del NSF.
       </p>
     </section>
 
     <section class="visualizers">
-      <article class="channel">
-        <div class="channelHead"><h2>Pulse 1</h2><span>Canal cuadrado 1</span></div>
+      <article class="channel" data-channel="0">
+        <div class="channelHead">
+          <div><h2>Pulse 1</h2><span>Canal cuadrado 1 estimado</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="0" aria-pressed="false">Mute</button>
+        </div>
         <canvas id="ch0" width="1200" height="260"></canvas>
         <p id="readout0">—</p>
       </article>
 
-      <article class="channel">
-        <div class="channelHead"><h2>Pulse 2</h2><span>Canal cuadrado 2</span></div>
+      <article class="channel" data-channel="1">
+        <div class="channelHead">
+          <div><h2>Pulse 2</h2><span>Canal cuadrado 2 estimado</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="1" aria-pressed="false">Mute</button>
+        </div>
         <canvas id="ch1" width="1200" height="260"></canvas>
         <p id="readout1">—</p>
       </article>
 
-      <article class="channel">
-        <div class="channelHead"><h2>Triangle</h2><span>Bajo / melodía triangular</span></div>
+      <article class="channel" data-channel="2">
+        <div class="channelHead">
+          <div><h2>Triangle</h2><span>Bajo / melodía triangular estimada</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="2" aria-pressed="false">Mute</button>
+        </div>
         <canvas id="ch2" width="1200" height="260"></canvas>
         <p id="readout2">—</p>
       </article>
 
-      <article class="channel">
-        <div class="channelHead"><h2>Noise</h2><span>Percusión / ruido</span></div>
+      <article class="channel" data-channel="3">
+        <div class="channelHead">
+          <div><h2>Noise</h2><span>Percusión / ruido estimado</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="3" aria-pressed="false">Mute</button>
+        </div>
         <canvas id="ch3" width="1200" height="260"></canvas>
         <p id="readout3">—</p>
       </article>
 
-      <article class="channel wide">
-        <div class="channelHead"><h2>DPCM / Mix</h2><span>Samples o mezcla final</span></div>
+      <article class="channel wide" data-channel="4">
+        <div class="channelHead">
+          <div><h2>DPCM / Mix</h2><span>Samples o mezcla final estimada</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="4" aria-pressed="false">Mute</button>
+        </div>
         <canvas id="ch4" width="1200" height="260"></canvas>
         <p id="readout4">—</p>
       </article>
