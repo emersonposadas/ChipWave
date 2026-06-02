@@ -36,6 +36,8 @@ const CHANNELS = [
   { name: "DPCM/Mix", visualType: "sample" }
 ];
 
+const RANDOM_TRACK_LIMIT = 15;
+
 const VISUAL_TUNING = {
   pulse: { phaseDivisor: 260, minPhaseRate: 0.04, maxPhaseRate: 2.2, lineWidth: 2.5, glow: 8 },
   triangle: { phaseDivisor: 340, minPhaseRate: 0.03, maxPhaseRate: 1.65, lineWidth: 2.55, glow: 9 },
@@ -45,6 +47,8 @@ const VISUAL_TUNING = {
 
 let audioCtx;
 let processor;
+let processorInputSource;
+let processorInputGain;
 let masterGain;
 let analyserSource;
 let analyzers = [];
@@ -63,6 +67,7 @@ let isPlaying = false;
 let currentTrack = 0;
 let lastPcmPeak = 0;
 let lastGmeError = 0;
+let audioUnlocked = false;
 
 const mutedChannels = [false, false, false, false, false];
 
@@ -375,7 +380,8 @@ async function loadNsfBytes(bytes, name) {
 
 function selectRandomTrack() {
   const count = (currentInfo && currentInfo.songs) || trackSelect.options.length || 1;
-  const randomTrack = Math.floor(Math.random() * Math.max(1, count));
+  const playableCount = Math.max(1, Math.min(count, RANDOM_TRACK_LIMIT));
+  const randomTrack = Math.floor(Math.random() * playableCount);
 
   currentTrack = randomTrack;
   trackSelect.value = String(randomTrack);
@@ -398,8 +404,15 @@ async function ensureAudio() {
     masterGain = audioCtx.createGain();
     masterGain.gain.value = Number(volume.value);
 
-    processor = audioCtx.createScriptProcessor(frameSize, 0, 2);
+    processor = audioCtx.createScriptProcessor(frameSize, 1, 2);
     processor.onaudioprocess = processAudio;
+
+    processorInputSource = audioCtx.createOscillator();
+    processorInputGain = audioCtx.createGain();
+    processorInputGain.gain.value = 0;
+    processorInputSource.connect(processorInputGain);
+    processorInputGain.connect(processor);
+    processorInputSource.start();
 
     analyserSource = audioCtx.createGain();
 
@@ -444,8 +457,26 @@ async function ensureAudio() {
     await audioCtx.resume();
   }
 
+  unlockAudioOutput();
   applyApproxMuteState();
   updateMuteMode();
+}
+
+function unlockAudioOutput() {
+  if (!audioCtx || audioUnlocked) return;
+
+  try {
+    const source = audioCtx.createBufferSource();
+    const gain = audioCtx.createGain();
+    source.buffer = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+    gain.gain.value = 0;
+    source.connect(gain);
+    gain.connect(audioCtx.destination);
+    source.start(0);
+    audioUnlocked = true;
+  } catch (error) {
+    console.warn("No se pudo desbloquear audio con buffer silencioso:", error);
+  }
 }
 
 function hasRealMute() {
@@ -873,6 +904,27 @@ function unmuteAll() {
   setHelp("Todos los canales están activos.", "ok");
 }
 
+function drawSilentScope(ctx, width, height, mid, index) {
+  const state = channelVisualState[index];
+
+  if (state) {
+    state.frequency = 0;
+    state.amplitude = 0;
+  }
+
+  drawScopeGrid(ctx, width, height, mid, 3);
+
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(141,215,255,0.42)";
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  ctx.lineTo(width, mid);
+  ctx.stroke();
+
+  readouts[index].textContent = `${CHANNELS[index].name} · silencio`;
+}
+
 function drawLoop() {
   ctxs.forEach((ctx, index) => {
     const canvas = canvases[index];
@@ -887,6 +939,11 @@ function drawLoop() {
     if (!analyzerPack) {
       ctx.fillStyle = "rgba(255,255,255,0.55)";
       ctx.fillText("Sin analizador", 20, mid);
+      return;
+    }
+
+    if (!isPlaying) {
+      drawSilentScope(ctx, w, h, mid, index);
       return;
     }
 
