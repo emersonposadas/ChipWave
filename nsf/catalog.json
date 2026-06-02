@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-02T18:59:08.821607+00:00",
+  "updatedAt": "2026-06-02T20:12:07.308319+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -11,6 +11,17 @@
       "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/batman/Batman%20%28EMU%29.zophar.zip",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/batman/Batman%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T18:56:39.260431+00:00"
+    },
+    {
+      "filename": "blaster-master.nsf",
+      "path": "nsf/blaster-master.nsf",
+      "title": "Blaster Master",
+      "artist": "Naoki Kodaka, Marumo",
+      "songs": 16,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/blaster-master/Blaster%20Master%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/blaster-master/Blaster%20Master%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-02T20:12:07.308319+00:00"
     },
     {
       "filename": "castlevania1.nsf",
