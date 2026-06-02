@@ -1,7 +1,4 @@
-console.log("ChipWave app build v18 noise-scale-slow-motion loaded");
-const DEFAULT_NSF_PATH = "nsf/megaman3.nsf";
-const DEFAULT_NSF_NAME = "Mega Man 3 Demo";
-let defaultDemoLoadStarted = false;
+console.log("ChipWave app build v23 active master mix scope UI loaded");
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -38,6 +35,13 @@ const CHANNELS = [
   { name: "DPCM/Mix", visualType: "sample" }
 ];
 
+const VISUAL_TUNING = {
+  pulse: { phaseDivisor: 260, minPhaseRate: 0.04, maxPhaseRate: 2.2, lineWidth: 2.5, glow: 8 },
+  triangle: { phaseDivisor: 340, minPhaseRate: 0.03, maxPhaseRate: 1.65, lineWidth: 2.55, glow: 9 },
+  noise: { phaseDivisor: 680, minPhaseRate: 0.02, maxPhaseRate: 0.9, lineWidth: 3.05, glow: 11 },
+  sample: { phaseDivisor: 380, minPhaseRate: 0.035, maxPhaseRate: 1.55, lineWidth: 2.75, glow: 10 }
+};
+
 let audioCtx;
 let processor;
 let masterGain;
@@ -50,8 +54,10 @@ let currentBytes = null;
 let currentInfo = null;
 let currentName = "—";
 let gme = null;
+let channelScopes = [];
+let mixScope = null;
 let samplePtr = 0;
-let frameSize = 4096;
+let frameSize = 1024;
 let isPlaying = false;
 let currentTrack = 0;
 let lastPcmPeak = 0;
@@ -62,6 +68,7 @@ const mutedChannels = [false, false, false, false, false];
 let waveCyclesToShow = Number(waveCyclesSelect?.value || 3);
 let waveStaticEnabled = Boolean(waveStaticToggle?.checked);
 const channelVisualState = CHANNELS.map(() => ({ frequency: 0, amplitude: 0, phase: 0, lastFrameTime: 0 }));
+let initialRandomAutoplayDone = false;
 
 let gmeRuntimeReadyPromise = null;
 
@@ -199,19 +206,21 @@ async function loadCatalog() {
       const option = document.createElement("option");
       option.value = item.path;
       option.textContent = `${item.title || item.filename} — ${item.artist || "Desconocido"}`;
-      if (item.path === DEFAULT_NSF_PATH) option.selected = true;
       catalogSelect.appendChild(option);
     }
 
-    if (!catalogSelect.value && catalogSelect.options.length) {
-      catalogSelect.selectedIndex = 0;
+    setHelp(`Catálogo cargado: ${items.length} archivo(s).`, "ok");
+    if (!initialRandomAutoplayDone) {
+      initialRandomAutoplayDone = true;
+      await playRandomCatalogTrack(items);
     }
 
-    setHelp(`Catálogo cargado: ${items.length} archivo(s). Demo listo para cargar automáticamente.`, "ok");
+    return items;
   } catch (error) {
     console.warn(error);
     catalogSelect.innerHTML = '<option value="">No hay catálogo disponible</option>';
     setHelp("No se pudo cargar nsf/catalog.json. Ejecuta el workflow de importación o sube archivos manualmente.", "error");
+    return [];
   }
 }
 
@@ -224,19 +233,14 @@ async function loadFromCatalog() {
   await fetchAndLoad(path);
 }
 
-async function autoLoadDefaultNsf() {
-  if (defaultDemoLoadStarted || currentBytes) return;
-  defaultDemoLoadStarted = true;
+async function playRandomCatalogTrack(items) {
+  const playableItems = items.filter(item => item?.path);
+  if (!playableItems.length) return;
 
-  const catalogHasDefault = Array.from(catalogSelect?.options || []).some(option => option.value === DEFAULT_NSF_PATH);
-  if (catalogHasDefault) {
-    catalogSelect.value = DEFAULT_NSF_PATH;
-  }
-
-  nsfUrlInput.value = DEFAULT_NSF_PATH;
-  setStatus("Cargando demo...", "");
-  setHelp("Cargando una canción demo automáticamente para que los tracks estén disponibles desde el inicio.", "");
-  await fetchAndLoad(DEFAULT_NSF_PATH);
+  const item = playableItems[Math.floor(Math.random() * playableItems.length)];
+  catalogSelect.value = item.path;
+  setHelp("Seleccionando un NSF y track aleatorios del catálogo.", "ok");
+  await fetchAndLoad(item.path, { randomTrack: true, autoplay: true });
 }
 
 function updateMetadata() {
@@ -265,7 +269,7 @@ function updateMetadata() {
   stopBtn.disabled = false;
 }
 
-async function fetchAndLoad(path) {
+async function fetchAndLoad(path, options = {}) {
   setStatus("Cargando NSF...", "");
   setHelp("Descargando archivo NSF.", "");
 
@@ -274,11 +278,26 @@ async function fetchAndLoad(path) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const buffer = await response.arrayBuffer();
-    await loadNsfBytes(new Uint8Array(buffer), path.split("/").pop() || path);
+    const loaded = await loadNsfBytes(new Uint8Array(buffer), path.split("/").pop() || path);
+    if (!loaded) return false;
+
+    if (options.randomTrack) {
+      selectRandomTrack();
+    }
+
+    if (options.autoplay) {
+      await play();
+      if (isPlaying) {
+        setHelp(`Reproduciendo selección aleatoria: ${currentName}, Track ${currentTrack + 1}.`, "ok");
+      }
+    }
+
+    return true;
   } catch (error) {
     console.error(error);
     setStatus("Error cargando NSF", "error");
-    setHelp("No se pudo descargar. Si es URL externa, probablemente sea CORS. Impórtala con el workflow o usa un archivo local.", "error");
+    setHelp("No se pudo descargar el archivo del catálogo. Revisa que exista en nsf/ o usa un archivo local.", "error");
+    return false;
   }
 }
 
@@ -316,7 +335,7 @@ async function loadNsfBytes(bytes, name) {
   } catch (error) {
     setStatus("NSF inválido", "error");
     setHelp(error.message, "error");
-    return;
+    return false;
   }
 
   currentBytes = bytes;
@@ -327,13 +346,16 @@ async function loadNsfBytes(bytes, name) {
 
   updateMetadata();
   setStatus("NSF cargado", "");
-  const isDefaultDemo = name === DEFAULT_NSF_NAME || name === DEFAULT_NSF_PATH.split("/").pop();
-  setHelp(
-    isDefaultDemo
-      ? "Canción demo cargada automáticamente. Los tracks ya están disponibles; presiona Play para escuchar."
-      : "NSF cargado. Elige un track y presiona Play.",
-    "ok"
-  );
+  setHelp("NSF cargado. Elige un track y presiona Play.", "ok");
+  return true;
+}
+
+function selectRandomTrack() {
+  const count = currentInfo?.songs || trackSelect.options.length || 1;
+  const randomTrack = Math.floor(Math.random() * Math.max(1, count));
+
+  currentTrack = randomTrack;
+  trackSelect.value = String(randomTrack);
 }
 
 async function ensureAudio() {
@@ -375,7 +397,7 @@ async function ensureAudio() {
       gain.gain.value = mutedChannels[index] ? 0 : 1;
 
       analyser.fftSize = 2048;
-      analyser.smoothingTimeConstant = 0.72;
+      analyser.smoothingTimeConstant = 0.38;
 
       analyserSource.connect(filter);
       filter.connect(analyser);
@@ -423,73 +445,17 @@ function updateMuteMode() {
 function openGme(track) {
   closeGme();
 
-  const ref = Module._malloc(4);
-  const dataPtr = Module._malloc(currentBytes.length);
-
-  if (!ref || !dataPtr) {
-    if (ref) Module._free(ref);
-    if (dataPtr) Module._free(dataPtr);
-    throw new Error("No se pudo reservar memoria WASM para el NSF.");
-  }
-
-  if (typeof Module.writeArrayToMemory === "function") {
-    Module.writeArrayToMemory(currentBytes, dataPtr);
-  } else if (Module.HEAPU8) {
-    Module.HEAPU8.set(currentBytes, dataPtr);
-  } else {
-    Module._free(ref);
-    Module._free(dataPtr);
-    throw new Error("No hay método disponible para copiar el NSF a memoria WASM. Recompila libgme con writeArrayToMemory o EXPORT_ALL=1.");
-  }
-
-  const result = Module.ccall(
-    "gme_open_data",
-    "number",
-    ["number", "number", "number", "number"],
-    [dataPtr, currentBytes.length, ref, audioCtx.sampleRate]
-  );
-
-  if (result !== 0) {
-    Module._free(ref);
-    Module._free(dataPtr);
-    throw new Error("gme_open_data falló.");
-  }
-
-  const emu = Module.getValue(ref, "i32");
-
-  try {
-    Module.ccall("gme_ignore_silence", "number", ["number", "number"], [emu, 1]);
-  } catch {}
-
-  const startResult = Module.ccall(
-    "gme_start_track",
-    "number",
-    ["number", "number"],
-    [emu, track]
-  );
-
-  if (startResult !== 0) {
-    Module.ccall("gme_delete", "number", ["number"], [emu]);
-    Module._free(ref);
-    Module._free(dataPtr);
-    throw new Error("No se pudo iniciar el track NSF.");
-  }
-
-  let voiceCount = 5;
-  try {
-    voiceCount = Module.ccall("gme_voice_count", "number", ["number"], [emu]) || 5;
-  } catch {}
-
+  const main = createGmeInstance(track);
   samplePtr = Module._malloc(frameSize * 2 * 2);
 
   if (!samplePtr) {
-    Module.ccall("gme_delete", "number", ["number"], [emu]);
-    Module._free(ref);
-    Module._free(dataPtr);
+    destroyGmeInstance(main);
     throw new Error("No se pudo reservar memoria WASM para audio PCM.");
   }
 
-  gme = { ref, emu, voiceCount, dataPtr };
+  gme = main;
+  mixScope = createPcmScope(frameSize * 4);
+  channelScopes = createChannelScopes(track, main.voiceCount);
 
   mutedChannels.forEach((muted, index) => {
     if (muted) setRealMute(index, true);
@@ -498,28 +464,153 @@ function openGme(track) {
   updateMuteMode();
 
   if (hasRealMute()) {
-    setHelp(`NSF reproduciendo. Core reporta ${gme.voiceCount} voces. Mute real disponible.`, "ok");
+    setHelp(`NSF reproduciendo. Visualización por voz real activa (${gme.voiceCount} voces).`, "ok");
   } else {
     setHelp(`NSF reproduciendo. Core reporta ${gme.voiceCount} voces. gme_mute_voice no está disponible; usando fallback visual aproximado.`, "ok");
   }
 }
 
-function closeGme() {
-  if (gme?.emu) {
+function createGmeInstance(track) {
+  const ref = Module._malloc(4);
+  const dataPtr = Module._malloc(currentBytes.length);
+  let emu = 0;
+
+  if (!ref || !dataPtr) {
+    if (ref) Module._free(ref);
+    if (dataPtr) Module._free(dataPtr);
+    throw new Error("No se pudo reservar memoria WASM para el NSF.");
+  }
+
+  try {
+    if (typeof Module.writeArrayToMemory === "function") {
+      Module.writeArrayToMemory(currentBytes, dataPtr);
+    } else if (Module.HEAPU8) {
+      Module.HEAPU8.set(currentBytes, dataPtr);
+    } else {
+      throw new Error("No hay método disponible para copiar el NSF a memoria WASM. Recompila libgme con writeArrayToMemory o EXPORT_ALL=1.");
+    }
+
+    const result = Module.ccall(
+      "gme_open_data",
+      "number",
+      ["number", "number", "number", "number"],
+      [dataPtr, currentBytes.length, ref, audioCtx.sampleRate]
+    );
+
+    if (result !== 0) {
+      throw new Error("gme_open_data falló.");
+    }
+
+    emu = Module.getValue(ref, "i32");
+
     try {
-      Module.ccall("gme_delete", "number", ["number"], [gme.emu]);
+      Module.ccall("gme_ignore_silence", "number", ["number", "number"], [emu, 1]);
+    } catch {}
+
+    const startResult = Module.ccall(
+      "gme_start_track",
+      "number",
+      ["number", "number"],
+      [emu, track]
+    );
+
+    if (startResult !== 0) {
+      throw new Error("No se pudo iniciar el track NSF.");
+    }
+
+    let voiceCount = 5;
+    try {
+      voiceCount = Module.ccall("gme_voice_count", "number", ["number"], [emu]) || 5;
+    } catch {}
+
+    return { ref, emu, voiceCount, dataPtr };
+  } catch (error) {
+    if (emu) {
+      try {
+        Module.ccall("gme_delete", "number", ["number"], [emu]);
+      } catch {}
+    }
+    if (ref) Module._free(ref);
+    if (dataPtr) Module._free(dataPtr);
+    throw error;
+  }
+}
+
+function createChannelScopes(track, voiceCount) {
+  if (!hasRealMute()) return [];
+
+  const scopeCount = Math.min(CHANNELS.length, Math.max(0, voiceCount || CHANNELS.length));
+
+  return CHANNELS.map((channel, channelIndex) => {
+    if (channelIndex >= scopeCount) return null;
+    let scope = null;
+
+    try {
+      scope = createGmeInstance(track);
+      scope.samplePtr = Module._malloc(frameSize * 2 * 2);
+      scope.time = new Uint8Array(frameSize);
+      scope.time.fill(128);
+      scope.history = new Uint8Array(frameSize * 4);
+      scope.history.fill(128);
+      scope.lastPeak = 0;
+
+      if (!scope.samplePtr) {
+        destroyGmeInstance(scope);
+        return null;
+      }
+
+      for (let voiceIndex = 0; voiceIndex < scope.voiceCount; voiceIndex++) {
+        const keepVoice = channelIndex === 4 ? voiceIndex >= 4 : voiceIndex === channelIndex;
+        Module.ccall(
+          "gme_mute_voice",
+          "void",
+          ["number", "number", "number"],
+          [scope.emu, voiceIndex, keepVoice ? 0 : 1]
+        );
+      }
+
+      return scope;
+    } catch (error) {
+      destroyGmeInstance(scope);
+      console.warn(`No se pudo crear visualización real para ${channel.name}:`, error);
+      return null;
+    }
+  });
+}
+
+function createPcmScope(length) {
+  const history = new Uint8Array(length);
+  history.fill(128);
+
+  return {
+    time: new Uint8Array(frameSize),
+    history,
+    lastPeak: 0
+  };
+}
+
+function destroyGmeInstance(instance) {
+  if (!instance) return;
+
+  if (instance.emu) {
+    try {
+      Module.ccall("gme_delete", "number", ["number"], [instance.emu]);
     } catch (error) {
       console.warn(error);
     }
   }
 
-  if (gme?.ref) {
-    try { Module._free(gme.ref); } catch {}
-  }
+  if (instance.ref) try { Module._free(instance.ref); } catch {}
+  if (instance.dataPtr) try { Module._free(instance.dataPtr); } catch {}
+  if (instance.samplePtr) try { Module._free(instance.samplePtr); } catch {}
+}
 
-  if (gme?.dataPtr) {
-    try { Module._free(gme.dataPtr); } catch {}
-  }
+function closeGme() {
+  channelScopes.forEach(destroyGmeInstance);
+  channelScopes = [];
+  mixScope = null;
+
+  destroyGmeInstance(gme);
 
   if (samplePtr) {
     try { Module._free(samplePtr); } catch {}
@@ -562,26 +653,75 @@ function processAudio(event) {
       return;
     }
 
-    const base = samplePtr >> 1;
     let peak = 0;
 
     for (let i = 0; i < frameSize; i++) {
       const l = Module.getValue(samplePtr + i * 4, "i16") / 32768;
       const r = Module.getValue(samplePtr + i * 4 + 2, "i16") / 32768;
+      const mono = (l + r) * 0.5;
 
       left[i] = l;
       right[i] = r;
 
       const abs = Math.max(Math.abs(l), Math.abs(r));
       if (abs > peak) peak = abs;
+
+      if (mixScope?.time) {
+        mixScope.time[i] = Math.max(0, Math.min(255, Math.round(128 + mono * 128)));
+      }
     }
 
     lastPcmPeak = peak;
+    if (mixScope?.history) {
+      mixScope.history.copyWithin(0, frameSize);
+      mixScope.history.set(mixScope.time, mixScope.history.length - frameSize);
+      mixScope.lastPeak = peak;
+    }
+
+    renderChannelScopes();
   } catch (error) {
     console.error(error);
     left.fill(0);
     right.fill(0);
   }
+}
+
+function renderChannelScopes() {
+  channelScopes.forEach(scope => {
+    if (!scope?.emu || !scope.samplePtr || !scope.time) return;
+
+    try {
+      const err = Module.ccall(
+        "gme_play",
+        "number",
+        ["number", "number", "number"],
+        [scope.emu, frameSize * 2, scope.samplePtr]
+      );
+
+      if (err !== 0) return;
+
+      let peak = 0;
+
+      for (let i = 0; i < frameSize; i++) {
+        const l = Module.getValue(scope.samplePtr + i * 4, "i16") / 32768;
+        const r = Module.getValue(scope.samplePtr + i * 4 + 2, "i16") / 32768;
+        const mono = (l + r) * 0.5;
+        const abs = Math.abs(mono);
+
+        if (abs > peak) peak = abs;
+        scope.time[i] = Math.max(0, Math.min(255, Math.round(128 + mono * 128)));
+      }
+
+      if (scope.history) {
+        scope.history.copyWithin(0, frameSize);
+        scope.history.set(scope.time, scope.history.length - frameSize);
+      }
+
+      scope.lastPeak = peak;
+    } catch (error) {
+      console.warn("No se pudo renderizar visualización por voz:", error);
+    }
+  });
 }
 
 async function play() {
@@ -707,6 +847,7 @@ function drawLoop() {
   ctxs.forEach((ctx, index) => {
     const canvas = canvases[index];
     const analyzerPack = analyzers[index];
+    const visualType = CHANNELS[index].visualType;
     const w = canvas.width;
     const h = canvas.height;
     const mid = h / 2;
@@ -719,36 +860,54 @@ function drawLoop() {
       return;
     }
 
-    analyzerPack.analyser.getByteTimeDomainData(analyzerPack.time);
-    analyzerPack.analyser.getByteFrequencyData(analyzerPack.freq);
+    const scope = channelScopes[index];
+    const timeData = getChannelTimeData(visualType, scope, analyzerPack);
+    const hasRealVoiceScope = Boolean(scope?.time);
+    const usingRealVoiceData = hasRealVoiceScope && timeData !== analyzerPack.time;
+    let fftPeak = { frequency: 0 };
 
-    const fftPeak = findPeak(analyzerPack.freq, audioCtx?.sampleRate || 44100, analyzerPack.analyser.fftSize);
-    const energy = rms(analyzerPack.time);
-    const rawAmplitude = peakAmplitude(analyzerPack.time);
+    if (!hasRealVoiceScope) {
+      analyzerPack.analyser.getByteTimeDomainData(analyzerPack.time);
+      analyzerPack.analyser.getByteFrequencyData(analyzerPack.freq);
+      fftPeak = findPeak(analyzerPack.freq, audioCtx?.sampleRate || 44100, analyzerPack.analyser.fftSize);
+    }
+
+    const rawAmplitude = visualType === "sample" && mixScope
+      ? mixScope.lastPeak
+      : hasRealVoiceScope
+        ? scope.lastPeak
+        : peakAmplitude(timeData);
     const sampleRate = audioCtx?.sampleRate || 44100;
-    const measuredFrequency = estimateFrequencyFromTimeData(analyzerPack.time, sampleRate) || fftPeak.frequency;
+    const measuredFrequency = estimateFrequencyFromTimeData(timeData, sampleRate) || fftPeak.frequency;
     const smoothed = updateChannelVisualState(index, measuredFrequency, rawAmplitude, performance.now());
     // Visual amplitude comes from the analyzed audio data, not from the master volume slider.
     // This keeps the oscilloscope faithful to the generated signal while the slider only controls listening level.
-    const dataAmplitude = mutedChannels[index] ? 0 : smoothed.amplitude;
-    const effectiveAmplitude = getDisplayAmplitude(CHANNELS[index].visualType, dataAmplitude);
-    const cyclesToShow = waveCyclesToShow || 3;
+    const dataAmplitude = smoothed.amplitude;
+    const effectiveAmplitude = getDisplayAmplitude(visualType, dataAmplitude, mutedChannels[index]);
     const displayFrequency = Math.max(0, smoothed.frequency);
-    const samplesPerCycle = displayFrequency > 0 ? sampleRate / displayFrequency : analyzerPack.time.length;
-    const visibleSamples = Math.max(16, Math.min(analyzerPack.time.length, Math.round(samplesPerCycle * cyclesToShow)));
-    const startSample = waveStaticEnabled
-      ? findStableWaveStart(analyzerPack.time, visibleSamples)
-      : Math.max(0, analyzerPack.time.length - visibleSamples);
+    const scopeWindow = getScopeWindow(visualType, waveCyclesToShow, displayFrequency, sampleRate, timeData.length);
+    const visibleSamples = scopeWindow.visibleSamples;
+    const startSample = findStableWaveStart(timeData, visibleSamples);
 
-    const cycles = cyclesToShow;
-    const baseAmp = Math.min(h * 0.42, Math.max(2, effectiveAmplitude * h * 0.82));
-    const phase = waveStaticEnabled ? 0 : smoothed.phase;
-    const visualType = CHANNELS[index].visualType;
+    const cycles = scopeWindow.cycles;
+    const baseAmp = Math.min(h * 0.48, Math.max(6, effectiveAmplitude * h * 0.98));
+    const phase = 0;
+    const tuning = VISUAL_TUNING[visualType] || VISUAL_TUNING.pulse;
 
-    drawScopeGrid(ctx, w, h, mid, cyclesToShow);
+    drawScopeGrid(ctx, w, h, mid, scopeWindow.gridLines);
 
-    ctx.lineWidth = 2.6;
-    ctx.strokeStyle = mutedChannels[index] ? "rgba(255,107,107,0.74)" : "rgba(141,215,255,0.97)";
+    ctx.lineWidth = mutedChannels[index] ? Math.max(1.9, tuning.lineWidth - 0.55) : tuning.lineWidth;
+    ctx.strokeStyle = mutedChannels[index]
+      ? "rgba(255,139,139,0.72)"
+      : visualType === "noise"
+        ? "rgba(224,178,255,0.92)"
+        : "rgba(141,215,255,0.97)";
+    ctx.shadowColor = mutedChannels[index]
+      ? "rgba(255,107,107,0.22)"
+      : visualType === "noise"
+        ? "rgba(215,166,255,0.38)"
+        : "rgba(141,215,255,0.24)";
+    ctx.shadowBlur = tuning.glow;
     ctx.beginPath();
 
     for (let x = 0; x < w; x++) {
@@ -758,10 +917,13 @@ function drawLoop() {
         normalizedX,
         cycles,
         phase,
-        analyzerPack.time,
+        timeData,
         startSample,
         visibleSamples,
-        waveStaticEnabled
+        waveStaticEnabled,
+        effectiveAmplitude,
+        mutedChannels[index],
+        hasRealVoiceScope
       );
       const movement = waveStaticEnabled ? 1 : getAnimatedEnvelope(normalizedX, phase, effectiveAmplitude, visualType);
       const y = mid - sample * baseAmp * movement;
@@ -771,15 +933,19 @@ function drawLoop() {
     }
 
     ctx.stroke();
+    ctx.shadowBlur = 0;
 
     const muteState = mutedChannels[index] ? "muteado" : "activo";
-    const mode = hasRealMute() ? "real" : "aprox";
 
-    const waveMode = waveStaticEnabled ? "estática" : "animada";
     const visualLabel = getDisplayWaveLabel(CHANNELS[index].visualType);
+    const scopeLabel = visualType === "sample" && mixScope
+      ? "mix real"
+      : usingRealVoiceData
+        ? "voz real"
+        : "mix aprox";
 
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · forma ${visualLabel} · frecuencia ${Math.round(displayFrequency)} Hz · amplitud datos ${(dataAmplitude * 100).toFixed(1)}% · visual ${(effectiveAmplitude * 100).toFixed(1)}% · scroll lento · ventana ${formatVisibleWindowMs(cyclesToShow, displayFrequency)} · PCM real ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+      `${CHANNELS[index].name} · ${muteState} · ${scopeLabel} · ${visualLabel} · ${scopeWindow.label}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
@@ -796,6 +962,8 @@ function updateVolumeLabel() {
 
 function updateChannelVisualState(index, measuredFrequency, measuredAmplitude, nowMs) {
   const state = channelVisualState[index];
+  const visualType = CHANNELS[index]?.visualType || "pulse";
+  const tuning = VISUAL_TUNING[visualType] || VISUAL_TUNING.pulse;
   const safeFrequency = Number.isFinite(measuredFrequency) && measuredFrequency > 0 ? measuredFrequency : state.frequency || 0;
   const safeAmplitude = Number.isFinite(measuredAmplitude) ? Math.max(0, Math.min(1, measuredAmplitude)) : 0;
 
@@ -806,39 +974,85 @@ function updateChannelVisualState(index, measuredFrequency, measuredAmplitude, n
   const deltaSeconds = Math.max(0, Math.min(0.08, (nowMs - state.lastFrameTime) / 1000));
   state.lastFrameTime = nowMs;
 
-  const visualCyclesPerSecond = getVisualScrollSpeed(CHANNELS[index].visualType, state.frequency);
+  const visualCyclesPerSecond = Math.max(
+    tuning.minPhaseRate,
+    Math.min(tuning.maxPhaseRate, state.frequency / tuning.phaseDivisor)
+  );
   state.phase = (state.phase + deltaSeconds * visualCyclesPerSecond) % 1;
 
   return state;
 }
 
-function getVisualScrollSpeed(type, frequency) {
-  const safeFrequency = Number.isFinite(frequency) && frequency > 0 ? frequency : 0;
-
-  // La frecuencia real sigue determinando la ventana y la lectura.
-  // Esta velocidad solo controla la animación horizontal para evitar que la onda "camine" demasiado rápido.
-  if (type === "noise") return 0.18;
-
-  return Math.max(0.035, Math.min(0.75, safeFrequency / 950));
-}
-
-function getDisplayAmplitude(type, dataAmplitude) {
+function getDisplayAmplitude(type, dataAmplitude, muted = false) {
   const amount = Number.isFinite(dataAmplitude) ? Math.max(0, Math.min(1, dataAmplitude)) : 0;
 
-  if (amount <= 0.001) return 0;
+  if (muted) {
+    const mutedFloor = type === "noise" ? 0.12 : type === "sample" ? 0.1 : 0.075;
+    return Math.max(mutedFloor, Math.min(0.22, amount * 0.55));
+  }
+
+  if (amount <= 0.002) return type === "sample" ? 0.035 : 0;
 
   if (type === "noise") {
-    // El canal Noise tiene picos más pequeños y más aleatorios que los canales tonales.
-    // Se usa una curva de normalización visual basada en los datos analizados, no en el slider.
-    const expanded = Math.pow(amount, 0.52) * 1.18;
-    return Math.min(0.96, Math.max(0.32, expanded));
+    // El canal Noise del APU suele llegar con menos pico en el analyser.
+    // Esta normalización conserva presencia visual sin convertirlo en una banda de ruido constante.
+    return Math.min(0.72, Math.max(0.22, amount * 5.2));
   }
 
   if (type === "sample") {
-    return Math.min(0.88, Math.max(0.06, amount * 1.5));
+    return Math.min(0.86, Math.max(0.22, amount * 4.4));
   }
 
-  return amount;
+  if (type === "triangle") {
+    return Math.min(0.68, Math.max(0.15, amount * 1.8));
+  }
+
+  return Math.min(0.72, Math.max(0.15, amount * 1.8));
+}
+
+function getChannelTimeData(type, scope, analyzerPack) {
+  if (type === "sample" && mixScope?.history) return mixScope.history;
+  if (!scope?.time) return analyzerPack.time;
+
+  if (type === "noise") {
+    return scope.history || scope.time;
+  }
+
+  return scope.time;
+}
+
+function getScopeWindow(type, zoomValue, frequency, sampleRate, bufferLength) {
+  const zoom = Number(zoomValue) || 3;
+
+  if (type === "sample") {
+    const samplesPerCycle = frequency > 0 ? sampleRate / frequency : bufferLength;
+    const visibleSamples = Math.max(16, Math.min(bufferLength, Math.round(samplesPerCycle * zoom)));
+    return {
+      visibleSamples,
+      cycles: zoom,
+      gridLines: zoom,
+      label: `${zoom} ciclos`
+    };
+  }
+
+  const windowByZoom = {
+    1: 24,
+    3: 14,
+    5: 10,
+    10: 7
+  };
+  const typeOffset = type === "noise" ? 0.75 : 1;
+  const windowMs = (windowByZoom[zoom] || 18) * typeOffset;
+  const visibleSamples = Math.max(16, Math.min(bufferLength, Math.round(sampleRate * windowMs / 1000)));
+  const pitchCycles = frequency > 0 ? frequency * windowMs / 1000 : zoom;
+  const cycles = Math.max(0.5, Math.min(14, pitchCycles));
+
+  return {
+    visibleSamples,
+    cycles,
+    gridLines: Math.max(2, Math.round(windowMs / 4)),
+    label: `${windowMs.toFixed(windowMs >= 10 ? 0 : 1)} ms`
+  };
 }
 
 function peakAmplitude(timeData) {
@@ -887,25 +1101,44 @@ function estimateFrequencyFromTimeData(timeData, sampleRate) {
   return Number.isFinite(frequency) && frequency > 0 ? frequency : 0;
 }
 
-function formatVisibleWindowMs(cycles, frequency) {
-  if (!frequency || frequency <= 0) return "— ms";
-  return `${(cycles / frequency * 1000).toFixed(2)} ms`;
-}
-
-function getDisplayWaveSample(type, normalizedX, cycles, phase, timeData, startSample, visibleSamples, staticMode = false) {
+function getDisplayWaveSample(type, normalizedX, cycles, phase, timeData, startSample, visibleSamples, staticMode = false, amplitude = 0, muted = false, realVoiceScope = false) {
   if (type === "pulse") {
     const position = ((normalizedX * cycles + phase) % 1 + 1) % 1;
     const ideal = position < 0.5 ? 1 : -1;
-    return staticMode ? ideal : blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, 0.08);
+    const wobble = staticMode ? 0 : Math.sin((normalizedX * 6 + phase * 0.5) * Math.PI * 2) * 0.018;
+    const blend = realVoiceScope ? 0.68 : muted ? 0.18 : 0.14;
+
+    return staticMode
+      ? blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, realVoiceScope ? 0.5 : 0)
+      : blendWithAnalyzer(ideal + wobble, timeData, normalizedX, startSample, visibleSamples, blend);
   }
 
   if (type === "triangle") {
     const position = ((normalizedX * cycles + phase) % 1 + 1) % 1;
     const ideal = 1 - 4 * Math.abs(position - 0.5);
-    return staticMode ? ideal : blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, 0.1);
+    const realBlend = realVoiceScope ? 0.74 : muted ? 0.28 : 0.48;
+    const softened = ideal * 0.92 + Math.sin((normalizedX * cycles * 2 + phase) * Math.PI * 2) * 0.035;
+    return staticMode ? blendWithAnalyzer(softened, timeData, normalizedX, startSample, visibleSamples, 0.34) : blendWithAnalyzer(softened, timeData, normalizedX, startSample, visibleSamples, realBlend);
   }
 
-  return getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples);
+  if (type === "noise") {
+    const real = getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples);
+    if (realVoiceScope || staticMode) return Math.max(-1, Math.min(1, real * (muted ? 0.86 : 1.08)));
+
+    const crackle =
+      Math.sin((normalizedX * 43 + phase * 1.25) * Math.PI * 2) * 0.055 +
+      Math.sin((normalizedX * 91 - phase * 2.1) * Math.PI * 2) * 0.035;
+
+    return Math.max(-1, Math.min(1, real * (muted ? 0.85 : 1.1) + crackle));
+  }
+
+  const real = getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples);
+  const body =
+    Math.sin((normalizedX * cycles + phase * 0.55) * Math.PI * 2) * 0.2 +
+    Math.sin((normalizedX * cycles * 2.7 - phase * 0.35) * Math.PI * 2) * 0.08;
+  const lift = Math.max(0.08, Math.min(0.42, amplitude * 0.75));
+
+  return Math.max(-1, Math.min(1, real * 1.28 + body * lift * (muted ? 0.75 : 1)));
 }
 
 function blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, amount) {
@@ -1008,20 +1241,9 @@ function findPeak(freqData, sampleRate, fftSize) {
   };
 }
 
-function rms(timeData) {
-  let sum = 0;
-
-  for (const value of timeData) {
-    const normalized = (value - 128) / 128;
-    sum += normalized * normalized;
-  }
-
-  return Math.sqrt(sum / timeData.length);
-}
-
 refreshCatalogBtn.addEventListener("click", loadCatalog);
 loadCatalogBtn.addEventListener("click", loadFromCatalog);
-loadUrlBtn.addEventListener("click", loadFromUrl);
+loadUrlBtn?.addEventListener("click", loadFromUrl);
 fileInput.addEventListener("change", loadFromFile);
 playBtn.addEventListener("click", play);
 pauseBtn.addEventListener("click", pause);
@@ -1064,7 +1286,7 @@ window.addEventListener("error", event => {
 setMuteMode("libgme v11 pendiente hasta Play");
 updateMuteUIOnly();
 updateVolumeLabel();
-loadCatalog().finally(autoLoadDefaultNsf);
+loadCatalog();
 
 setTimeout(() => {
   if (window.Module) {
