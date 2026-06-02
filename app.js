@@ -1,4 +1,4 @@
-console.log("ChipWave app build v12 ideal waveform UI loaded");
+console.log("ChipWave app build v13 animated waveform UI loaded");
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -702,12 +702,15 @@ function drawLoop() {
       : Math.max(0, analyzerPack.time.length - visibleSamples);
 
     const cycles = cyclesToShow;
-    const amp = Math.max(12, Math.min(h * 0.36, energy * h * 1.65));
-    const phase = waveStaticEnabled ? 0 : (performance.now() / 1000) * 0.85;
+    const baseAmp = Math.max(18, Math.min(h * 0.38, energy * h * 1.75));
+    const scrollRate = Math.max(0.65, Math.min(5.5, peak.frequency / 120));
+    const phase = waveStaticEnabled ? 0 : (performance.now() / 1000) * scrollRate;
     const visualType = CHANNELS[index].visualType;
 
-    ctx.lineWidth = 2.4;
-    ctx.strokeStyle = mutedChannels[index] ? "rgba(255,107,107,0.72)" : "rgba(141,215,255,0.96)";
+    drawScopeGrid(ctx, w, h, mid, cyclesToShow);
+
+    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = mutedChannels[index] ? "rgba(255,107,107,0.74)" : "rgba(141,215,255,0.97)";
     ctx.beginPath();
 
     for (let x = 0; x < w; x++) {
@@ -719,9 +722,11 @@ function drawLoop() {
         phase,
         analyzerPack.time,
         startSample,
-        visibleSamples
+        visibleSamples,
+        waveStaticEnabled
       );
-      const y = mid - sample * amp;
+      const movement = waveStaticEnabled ? 1 : getAnimatedEnvelope(normalizedX, phase, energy);
+      const y = mid - sample * baseAmp * movement;
 
       if (x === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
@@ -729,16 +734,10 @@ function drawLoop() {
 
     ctx.stroke();
 
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
-    ctx.beginPath();
-    ctx.moveTo(0, mid);
-    ctx.lineTo(w, mid);
-    ctx.stroke();
-
     const muteState = mutedChannels[index] ? "muteado" : "activo";
     const mode = hasRealMute() ? "real" : "aprox";
 
-    const waveMode = waveStaticEnabled ? "estática" : "dinámica";
+    const waveMode = waveStaticEnabled ? "estática" : "animada";
     const visualLabel = getDisplayWaveLabel(CHANNELS[index].visualType);
 
     readouts[index].textContent =
@@ -748,18 +747,60 @@ function drawLoop() {
   rafId = requestAnimationFrame(drawLoop);
 }
 
-function getDisplayWaveSample(type, normalizedX, cycles, phase, timeData, startSample, visibleSamples) {
+function getDisplayWaveSample(type, normalizedX, cycles, phase, timeData, startSample, visibleSamples, staticMode = false) {
   if (type === "pulse") {
     const position = ((normalizedX * cycles + phase) % 1 + 1) % 1;
-    return position < 0.5 ? 1 : -1;
+    const ideal = position < 0.5 ? 1 : -1;
+    return staticMode ? ideal : blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, 0.08);
   }
 
   if (type === "triangle") {
     const position = ((normalizedX * cycles + phase) % 1 + 1) % 1;
-    return 1 - 4 * Math.abs(position - 0.5);
+    const ideal = 1 - 4 * Math.abs(position - 0.5);
+    return staticMode ? ideal : blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, 0.1);
   }
 
   return getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples);
+}
+
+function blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSamples, amount) {
+  const real = getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples);
+  return Math.max(-1, Math.min(1, ideal * (1 - amount) + real * amount));
+}
+
+function getAnimatedEnvelope(normalizedX, phase, energy) {
+  const motion = Math.sin((normalizedX * 2 + phase * 0.23) * Math.PI * 2);
+  const depth = Math.max(0.015, Math.min(0.07, energy * 0.18));
+  return 1 + motion * depth;
+}
+
+function drawScopeGrid(ctx, width, height, mid, cyclesToShow) {
+  const verticalLines = Math.max(1, cyclesToShow);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.065)";
+  ctx.lineWidth = 1;
+
+  for (let i = 1; i < verticalLines; i++) {
+    const x = width * i / verticalLines;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+
+  for (let i = 1; i < 4; i++) {
+    const y = height * i / 4;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  ctx.lineTo(width, mid);
+  ctx.stroke();
 }
 
 function getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples) {
