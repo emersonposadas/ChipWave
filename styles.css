@@ -414,3 +414,77 @@ code {
   .shell { width: min(100% - 20px, 1440px); padding-top: 16px; }
   canvas { height: 220px; }
 }
+
+/* UX polish: clearer hierarchy, stronger active states, and a more readable noise channel. */
+.statusCard, .panel, .channel {
+  backdrop-filter: blur(18px);
+}
+
+.panelHeader h2,
+.channelHead h2 {
+  letter-spacing: -0.025em;
+}
+
+.viewPanel {
+  border-color: rgba(141, 215, 255, 0.34);
+  background: linear-gradient(180deg, rgba(20, 31, 50, 0.96), rgba(13, 18, 31, 0.94));
+}
+
+.viewPanel .microcopy {
+  padding: 9px 11px;
+  border: 1px solid rgba(141, 215, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(141, 215, 255, 0.055);
+}
+
+.channel[data-channel="3"] {
+  border-color: rgba(215, 166, 255, 0.42);
+  background: linear-gradient(180deg, rgba(31, 22, 46, 0.72), rgba(13, 18, 31, 0.92));
+}
+
+.channel[data-channel="3"] canvas {
+  background:
+    linear-gradient(rgba(215,166,255,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(215,166,255,0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.1)),
+    #070812;
+  background-size: 30px 30px, 30px 30px, auto, auto;
+}
+
+.channel[data-channel="3"] .channelHead::after {
+  content: "normalizado";
+  align-self: center;
+  border: 1px solid rgba(215, 166, 255, 0.34);
+  color: #e6c8ff;
+  background: rgba(215, 166, 255, 0.09);
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.visualizers {
+  align-items: stretch;
+}
+
+.channel p {
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+button:active,
+.fileLabel:active {
+  transform: translateY(1px);
+}
+
+@media (min-width: 1121px) {
+  .mainStage {
+    min-width: 0;
+  }
+
+  .visualizers {
+    gap: 16px;
+  }
+}
