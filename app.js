@@ -54,32 +54,25 @@ let gmeRuntimeReadyPromise = null;
 
 function waitForGmeRuntime() {
   if (!window.Module) {
-    return Promise.reject(new Error("No se encontró Module. Revisa que vendor/libgme.js exista y cargue correctamente."));
+    return Promise.reject(new Error("No se encontró window.Module. Revisa que index.html defina Module antes de cargar vendor/libgme.js."));
   }
 
-  if (Module.calledRun || Module.runtimeInitialized) {
+  if (Module.runtimeInitialized || Module.calledRun) {
     return Promise.resolve();
   }
 
-  if (!gmeRuntimeReadyPromise) {
-    gmeRuntimeReadyPromise = new Promise((resolve, reject) => {
-      const previous = Module.onRuntimeInitialized;
-
-      Module.onRuntimeInitialized = () => {
-        Module.runtimeInitialized = true;
-        if (typeof previous === "function") previous();
-        resolve();
-      };
-
-      setTimeout(() => {
-        if (!(Module.calledRun || Module.runtimeInitialized)) {
-          reject(new Error("vendor/libgme.wasm aún no terminó de cargar. Revisa la consola y que vendor/libgme.wasm exista."));
-        }
-      }, 10000);
-    });
+  if (window.__gmeRuntimeReady) {
+    return Promise.race([
+      window.__gmeRuntimeReady,
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("vendor/libgme.wasm no terminó de inicializar. Revisa que vendor/libgme.wasm exista y que index.html use locateFile()."));
+        }, 10000);
+      })
+    ]);
   }
 
-  return gmeRuntimeReadyPromise;
+  return Promise.reject(new Error("No existe __gmeRuntimeReady. Revisa que index.html cargue el bloque Module antes de vendor/libgme.js."));
 }
 
 
@@ -723,6 +716,6 @@ window.addEventListener("error", event => {
   }
 });
 
-setMuteMode("Esperando libgme");
+setMuteMode("libgme pendiente hasta Play");
 updateMuteUIOnly();
 loadCatalog();

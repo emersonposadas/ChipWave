@@ -148,6 +148,25 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
     </section>
   </main>
 
+  <script>
+    window.__gmeRuntimeReady = new Promise((resolve, reject) => {
+      window.__resolveGmeRuntime = resolve;
+      window.__rejectGmeRuntime = reject;
+    });
+
+    window.Module = {
+      locateFile(path) {
+        if (path.endsWith(".wasm")) return "vendor/" + path;
+        return path;
+      },
+      onRuntimeInitialized() {
+        window.Module.runtimeInitialized = true;
+        if (typeof window.__resolveGmeRuntime === "function") {
+          window.__resolveGmeRuntime();
+        }
+      }
+    };
+  </script>
   <script src="vendor/libgme.js"></script>
   <script src="app.js"></script>
 </body>
