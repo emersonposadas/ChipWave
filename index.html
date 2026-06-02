@@ -3,95 +3,62 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ChipWave Visualizer</title>
+  <title>ChipWave NSF Visualizer</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="app">
     <header class="hero">
       <div>
-        <p class="eyebrow">GitHub Pages / Web Audio API</p>
-        <h1>ChipWave Visualizer</h1>
-        <p class="subtitle">
-          Carga una URL directa de audio 8-bit o sube un archivo para reproducirlo y visualizar cuatro canales estimados.
-        </p>
+        <p class="eyebrow">GitHub Pages / NSF / Web Audio API</p>
+        <h1>ChipWave NSF Visualizer</h1>
+        <p class="subtitle">Carga una URL directa a un archivo .nsf o sube un NSF local para reproducirlo y visualizar canales NES.</p>
       </div>
-      <div class="meter">
-        <span id="statusDot"></span>
-        <strong id="statusText">Listo</strong>
-      </div>
+      <div class="meter"><span id="statusDot"></span><strong id="statusText">Listo</strong></div>
     </header>
 
     <section class="panel">
-      <label for="prompt">Prompt o URL directa de audio</label>
-      <textarea id="prompt" spellcheck="false" placeholder="Ejemplo: analiza esta canción 8-bit https://example.com/song.mp3"></textarea>
+      <label for="nsfUrl">URL .nsf</label>
+      <textarea id="nsfUrl" spellcheck="false" placeholder="Ejemplo: https://example.com/music/mega-man-3.nsf"></textarea>
 
       <div class="controls">
-        <button id="loadBtn">Cargar URL</button>
+        <button id="loadUrlBtn">Cargar NSF desde URL</button>
+        <label class="fileLabel">Subir .nsf<input id="fileInput" type="file" accept=".nsf,.nsfe,application/octet-stream" /></label>
+      </div>
+
+      <div class="controls transport">
         <button id="playBtn" disabled>Play</button>
         <button id="pauseBtn" disabled>Pausa</button>
         <button id="stopBtn" disabled>Stop</button>
-        <label class="fileLabel">
-          Subir audio
-          <input id="fileInput" type="file" accept="audio/*" />
-        </label>
+        <label class="trackLabel">Track <select id="trackSelect" disabled></select></label>
+        <label class="volume">Volumen <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" /></label>
       </div>
 
-      <div class="transport">
-        <span id="timeLabel">00:00 / 00:00</span>
-        <input id="seek" type="range" min="0" max="1000" value="0" disabled />
-        <label class="volume">
-          Volumen
-          <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" />
-        </label>
+      <div class="meta">
+        <p><strong>Archivo:</strong> <span id="fileName">—</span></p>
+        <p><strong>Título NSF:</strong> <span id="songTitle">—</span></p>
+        <p><strong>Artista:</strong> <span id="artist">—</span></p>
+        <p><strong>Canciones:</strong> <span id="songCount">—</span></p>
       </div>
 
-      <p class="hint" id="helpText">
-        Usa una URL directa a un archivo de audio: .mp3, .wav, .ogg, .m4a o .flac. YouTube no funciona directamente en el navegador como fuente de audio.
-      </p>
+      <p class="hint" id="helpText">La URL debe apuntar directamente a un archivo .nsf y permitir CORS. Si falla, sube el archivo localmente o aloja el NSF en el mismo repo.</p>
     </section>
 
-    <section class="visualizers" aria-label="Visualizadores de canales">
-      <article class="channel">
-        <div class="channelHead">
-          <h2>Canal 1</h2>
-          <span>Graves / pulso</span>
-        </div>
-        <canvas id="ch0" width="1200" height="260"></canvas>
-        <p id="readout0">—</p>
-      </article>
-
-      <article class="channel">
-        <div class="channelHead">
-          <h2>Canal 2</h2>
-          <span>Medios bajos</span>
-        </div>
-        <canvas id="ch1" width="1200" height="260"></canvas>
-        <p id="readout1">—</p>
-      </article>
-
-      <article class="channel">
-        <div class="channelHead">
-          <h2>Canal 3</h2>
-          <span>Melodía / medios altos</span>
-        </div>
-        <canvas id="ch2" width="1200" height="260"></canvas>
-        <p id="readout2">—</p>
-      </article>
-
-      <article class="channel">
-        <div class="channelHead">
-          <h2>Canal 4</h2>
-          <span>Brillo / ruido</span>
-        </div>
-        <canvas id="ch3" width="1200" height="260"></canvas>
-        <p id="readout3">—</p>
-      </article>
+    <section class="visualizers">
+      <article class="channel"><div class="channelHead"><h2>Pulse 1</h2><span>Canal cuadrado 1</span></div><canvas id="ch0" width="1200" height="260"></canvas><p id="readout0">—</p></article>
+      <article class="channel"><div class="channelHead"><h2>Pulse 2</h2><span>Canal cuadrado 2</span></div><canvas id="ch1" width="1200" height="260"></canvas><p id="readout1">—</p></article>
+      <article class="channel"><div class="channelHead"><h2>Triangle</h2><span>Bajo / melodía triangular</span></div><canvas id="ch2" width="1200" height="260"></canvas><p id="readout2">—</p></article>
+      <article class="channel"><div class="channelHead"><h2>Noise</h2><span>Percusión / ruido</span></div><canvas id="ch3" width="1200" height="260"></canvas><p id="readout3">—</p></article>
+      <article class="channel wide"><div class="channelHead"><h2>DPCM / Mix</h2><span>Samples o mezcla final</span></div><canvas id="ch4" width="1200" height="260"></canvas><p id="readout4">—</p></article>
     </section>
 
-    <audio id="audio" crossorigin="anonymous"></audio>
+    <section class="panel notes">
+      <h2>Notas técnicas</h2>
+      <p>Esta versión reproduce NSF real usando Game_Music_Emu vía JavaScript. Si el core no expone aislamiento por voz, los canales se visualizan como estimaciones por bandas sobre la mezcla NSF.</p>
+    </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/gh/okaybenji/nsf-player@master/libgme/libgme.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
