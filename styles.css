@@ -488,3 +488,40 @@ button:active,
     gap: 16px;
   }
 }
+
+
+/* v18 UI/UX polish: clearer focus on readable wave motion and stronger Noise visibility. */
+.viewPanel::after {
+  content: "Scroll lento activo";
+  display: inline-flex;
+  margin-top: 12px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(141, 215, 255, 0.22);
+  background: rgba(141, 215, 255, 0.075);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.channel[data-channel="3"] {
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(215, 166, 255, 0.12) inset;
+}
+
+.channel[data-channel="3"] .channelHead h2::after {
+  content: " destacado";
+  color: #e6c8ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+canvas {
+  height: clamp(240px, 27vh, 350px);
+}
+
+.channel[data-channel="3"] canvas {
+  height: clamp(260px, 29vh, 370px);
+}

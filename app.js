@@ -1,4 +1,7 @@
-console.log("ChipWave app build v16 noise-normalized waveform UI loaded");
+console.log("ChipWave app build v18 noise-scale-slow-motion loaded");
+const DEFAULT_NSF_PATH = "nsf/megaman3.nsf";
+const DEFAULT_NSF_NAME = "Mega Man 3 Demo";
+let defaultDemoLoadStarted = false;
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -196,10 +199,15 @@ async function loadCatalog() {
       const option = document.createElement("option");
       option.value = item.path;
       option.textContent = `${item.title || item.filename} — ${item.artist || "Desconocido"}`;
+      if (item.path === DEFAULT_NSF_PATH) option.selected = true;
       catalogSelect.appendChild(option);
     }
 
-    setHelp(`Catálogo cargado: ${items.length} archivo(s).`, "ok");
+    if (!catalogSelect.value && catalogSelect.options.length) {
+      catalogSelect.selectedIndex = 0;
+    }
+
+    setHelp(`Catálogo cargado: ${items.length} archivo(s). Demo listo para cargar automáticamente.`, "ok");
   } catch (error) {
     console.warn(error);
     catalogSelect.innerHTML = '<option value="">No hay catálogo disponible</option>';
@@ -214,6 +222,21 @@ async function loadFromCatalog() {
     return;
   }
   await fetchAndLoad(path);
+}
+
+async function autoLoadDefaultNsf() {
+  if (defaultDemoLoadStarted || currentBytes) return;
+  defaultDemoLoadStarted = true;
+
+  const catalogHasDefault = Array.from(catalogSelect?.options || []).some(option => option.value === DEFAULT_NSF_PATH);
+  if (catalogHasDefault) {
+    catalogSelect.value = DEFAULT_NSF_PATH;
+  }
+
+  nsfUrlInput.value = DEFAULT_NSF_PATH;
+  setStatus("Cargando demo...", "");
+  setHelp("Cargando una canción demo automáticamente para que los tracks estén disponibles desde el inicio.", "");
+  await fetchAndLoad(DEFAULT_NSF_PATH);
 }
 
 function updateMetadata() {
@@ -304,7 +327,13 @@ async function loadNsfBytes(bytes, name) {
 
   updateMetadata();
   setStatus("NSF cargado", "");
-  setHelp("NSF cargado. Elige un track y presiona Play.", "ok");
+  const isDefaultDemo = name === DEFAULT_NSF_NAME || name === DEFAULT_NSF_PATH.split("/").pop();
+  setHelp(
+    isDefaultDemo
+      ? "Canción demo cargada automáticamente. Los tracks ya están disponibles; presiona Play para escuchar."
+      : "NSF cargado. Elige un track y presiona Play.",
+    "ok"
+  );
 }
 
 async function ensureAudio() {
@@ -734,7 +763,7 @@ function drawLoop() {
         visibleSamples,
         waveStaticEnabled
       );
-      const movement = waveStaticEnabled ? 1 : getAnimatedEnvelope(normalizedX, phase, effectiveAmplitude);
+      const movement = waveStaticEnabled ? 1 : getAnimatedEnvelope(normalizedX, phase, effectiveAmplitude, visualType);
       const y = mid - sample * baseAmp * movement;
 
       if (x === 0) ctx.moveTo(x, y);
@@ -750,7 +779,7 @@ function drawLoop() {
     const visualLabel = getDisplayWaveLabel(CHANNELS[index].visualType);
 
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · forma ${visualLabel} · frecuencia ${Math.round(displayFrequency)} Hz · amplitud datos ${(dataAmplitude * 100).toFixed(1)}% · visual ${(effectiveAmplitude * 100).toFixed(1)}% · ventana ${formatVisibleWindowMs(cyclesToShow, displayFrequency)} · PCM real ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · forma ${visualLabel} · frecuencia ${Math.round(displayFrequency)} Hz · amplitud datos ${(dataAmplitude * 100).toFixed(1)}% · visual ${(effectiveAmplitude * 100).toFixed(1)}% · scroll lento · ventana ${formatVisibleWindowMs(cyclesToShow, displayFrequency)} · PCM real ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
@@ -777,25 +806,36 @@ function updateChannelVisualState(index, measuredFrequency, measuredAmplitude, n
   const deltaSeconds = Math.max(0, Math.min(0.08, (nowMs - state.lastFrameTime) / 1000));
   state.lastFrameTime = nowMs;
 
-  const visualCyclesPerSecond = Math.max(0.05, Math.min(7, state.frequency / 120));
+  const visualCyclesPerSecond = getVisualScrollSpeed(CHANNELS[index].visualType, state.frequency);
   state.phase = (state.phase + deltaSeconds * visualCyclesPerSecond) % 1;
 
   return state;
 }
 
+function getVisualScrollSpeed(type, frequency) {
+  const safeFrequency = Number.isFinite(frequency) && frequency > 0 ? frequency : 0;
+
+  // La frecuencia real sigue determinando la ventana y la lectura.
+  // Esta velocidad solo controla la animación horizontal para evitar que la onda "camine" demasiado rápido.
+  if (type === "noise") return 0.18;
+
+  return Math.max(0.035, Math.min(0.75, safeFrequency / 950));
+}
+
 function getDisplayAmplitude(type, dataAmplitude) {
   const amount = Number.isFinite(dataAmplitude) ? Math.max(0, Math.min(1, dataAmplitude)) : 0;
 
-  if (amount <= 0.002) return 0;
+  if (amount <= 0.001) return 0;
 
   if (type === "noise") {
-    // El canal Noise del APU suele llegar con menos pico en el analyser.
-    // Esta normalización conserva que la fuente sea el dato analizado, pero evita que se vea diminuto.
-    return Math.min(0.92, Math.max(0.18, amount * 3.8));
+    // El canal Noise tiene picos más pequeños y más aleatorios que los canales tonales.
+    // Se usa una curva de normalización visual basada en los datos analizados, no en el slider.
+    const expanded = Math.pow(amount, 0.52) * 1.18;
+    return Math.min(0.96, Math.max(0.32, expanded));
   }
 
   if (type === "sample") {
-    return Math.min(0.86, amount * 1.35);
+    return Math.min(0.88, Math.max(0.06, amount * 1.5));
   }
 
   return amount;
@@ -873,9 +913,10 @@ function blendWithAnalyzer(ideal, timeData, normalizedX, startSample, visibleSam
   return Math.max(-1, Math.min(1, ideal * (1 - amount) + real * amount));
 }
 
-function getAnimatedEnvelope(normalizedX, phase, energy) {
-  const motion = Math.sin((normalizedX * 2 + phase * 0.23) * Math.PI * 2);
-  const depth = Math.max(0.015, Math.min(0.07, energy * 0.18));
+function getAnimatedEnvelope(normalizedX, phase, energy, type) {
+  const motionFactor = type === "noise" ? 0.08 : 0.12;
+  const motion = Math.sin((normalizedX * 1.35 + phase * motionFactor) * Math.PI * 2);
+  const depth = Math.max(0.006, Math.min(0.032, energy * 0.08));
   return 1 + motion * depth;
 }
 
@@ -1023,7 +1064,7 @@ window.addEventListener("error", event => {
 setMuteMode("libgme v11 pendiente hasta Play");
 updateMuteUIOnly();
 updateVolumeLabel();
-loadCatalog();
+loadCatalog().finally(autoLoadDefaultNsf);
 
 setTimeout(() => {
   if (window.Module) {
