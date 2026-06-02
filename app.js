@@ -19,6 +19,9 @@ const muteModeEl = document.getElementById("muteMode");
 const catalogSelect = document.getElementById("catalogSelect");
 const loadCatalogBtn = document.getElementById("loadCatalogBtn");
 const randomCatalogBtn = document.getElementById("randomCatalogBtn");
+const favoriteBtn = document.getElementById("favoriteBtn");
+const shareBtn = document.getElementById("shareBtn");
+const favoritesSelect = document.getElementById("favoritesSelect");
 const refreshCatalogBtn = document.getElementById("refreshCatalogBtn");
 const unmuteAllBtn = document.getElementById("unmuteAllBtn");
 const waveCyclesSelect = document.getElementById("waveCycles");
@@ -38,6 +41,7 @@ const CHANNELS = [
 
 const RANDOM_TRACK_LIMIT = 15;
 const MIX_SCOPE_VISUAL_GAIN = 1.65;
+const FAVORITES_STORAGE_KEY = "chipwave:favorites:v1";
 
 const VISUAL_TUNING = {
   pulse: { phaseDivisor: 260, minPhaseRate: 0.04, maxPhaseRate: 2.2, lineWidth: 2.5, glow: 8 },
@@ -77,6 +81,7 @@ let waveStaticEnabled = Boolean(waveStaticToggle && waveStaticToggle.checked);
 const channelVisualState = CHANNELS.map(() => ({ frequency: 0, amplitude: 0, phase: 0, lastFrameTime: 0 }));
 let initialRandomAutoplayDone = false;
 let catalogItems = [];
+let favoriteItems = readFavorites();
 
 let gmeRuntimeReadyPromise = null;
 
@@ -195,6 +200,162 @@ function parseNsfHeader(bytes) {
   };
 }
 
+function readFavorites() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(item => item && item.path) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favoriteItems));
+  } catch (error) {
+    console.warn("No se pudieron guardar favoritos:", error);
+  }
+}
+
+function getCurrentCatalogItem() {
+  return catalogItems.find(item => item && item.path === catalogSelect.value) || null;
+}
+
+function getFavoriteKey(path, track) {
+  return `${path}::${track}`;
+}
+
+function getCurrentFavoriteKey() {
+  if (!catalogSelect.value || !currentBytes) return "";
+  return getFavoriteKey(catalogSelect.value, currentTrack);
+}
+
+function getShareUrl(path = catalogSelect.value, track = currentTrack) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("game", path);
+  url.searchParams.set("track", String(Math.max(1, Number(track) + 1)));
+  return url.toString();
+}
+
+function getSharedRequest() {
+  const params = new URLSearchParams(window.location.search);
+  const path = params.get("game") || params.get("nsf") || "";
+  const trackParam = Number(params.get("track") || "1");
+
+  if (!path) return null;
+
+  return {
+    path,
+    trackIndex: Math.max(0, (Number.isFinite(trackParam) ? trackParam : 1) - 1)
+  };
+}
+
+function updateFavoriteUI() {
+  if (favoriteBtn) {
+    const key = getCurrentFavoriteKey();
+    const saved = Boolean(key && favoriteItems.some(item => getFavoriteKey(item.path, item.track) === key));
+    favoriteBtn.disabled = !key;
+    favoriteBtn.textContent = saved ? "Quitar favorito" : "Favorito";
+  }
+
+  if (shareBtn) {
+    shareBtn.disabled = !catalogSelect.value || !currentBytes;
+  }
+
+  if (!favoritesSelect) return;
+
+  favoritesSelect.innerHTML = "";
+
+  if (!favoriteItems.length) {
+    favoritesSelect.innerHTML = '<option value="">Sin favoritos</option>';
+    favoritesSelect.disabled = true;
+    return;
+  }
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Abrir favorito";
+  favoritesSelect.appendChild(placeholder);
+
+  favoriteItems.forEach(item => {
+    const option = document.createElement("option");
+    option.value = getFavoriteKey(item.path, item.track);
+    option.textContent = item.label || `${item.title || item.path} · Track ${item.track + 1}`;
+    favoritesSelect.appendChild(option);
+  });
+
+  favoritesSelect.disabled = false;
+}
+
+function toggleFavorite() {
+  const path = catalogSelect.value;
+  if (!path || !currentBytes) return;
+
+  const key = getFavoriteKey(path, currentTrack);
+  const index = favoriteItems.findIndex(item => getFavoriteKey(item.path, item.track) === key);
+
+  if (index >= 0) {
+    favoriteItems.splice(index, 1);
+    setHelp("Favorito eliminado.", "ok");
+  } else {
+    const catalogItem = getCurrentCatalogItem();
+    const title = currentInfo && currentInfo.title ? currentInfo.title : (catalogItem && catalogItem.title) || currentName;
+    favoriteItems.unshift({
+      path,
+      track: currentTrack,
+      title,
+      label: `${title} · Track ${currentTrack + 1}`
+    });
+    setHelp("Favorito guardado.", "ok");
+  }
+
+  saveFavorites();
+  updateFavoriteUI();
+}
+
+async function loadFavoriteByKey(key) {
+  const favorite = favoriteItems.find(item => getFavoriteKey(item.path, item.track) === key);
+  if (!favorite) return;
+
+  catalogSelect.value = favorite.path;
+  await fetchAndLoad(favorite.path, {
+    autoplay: true,
+    trackIndex: favorite.track,
+    sharedLabel: true
+  });
+}
+
+async function shareCurrentTrack() {
+  if (!catalogSelect.value || !currentBytes) return;
+
+  const url = getShareUrl();
+  const title = currentInfo && currentInfo.title ? currentInfo.title : "ChipWave";
+  const text = `${title} · Track ${currentTrack + 1}`;
+
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: "ChipWave", text, url });
+      setHelp("Link compartido.", "ok");
+      return;
+    }
+
+    await navigator.clipboard.writeText(url);
+    setHelp("Link copiado al portapapeles.", "ok");
+  } catch (error) {
+    console.warn("No se pudo compartir automáticamente:", error);
+    window.prompt("Copia este link:", url);
+  }
+}
+
+function updateShareUrlState() {
+  if (!catalogSelect.value || !currentBytes) return;
+
+  const url = new URL(window.location.href);
+  url.searchParams.set("game", catalogSelect.value);
+  url.searchParams.set("track", String(currentTrack + 1));
+  window.history.replaceState({}, "", url);
+}
+
 async function loadCatalog() {
   try {
     const response = await fetch("nsf/catalog.json?cache=" + Date.now());
@@ -226,6 +387,18 @@ async function loadCatalog() {
     if (randomCatalogBtn) randomCatalogBtn.disabled = false;
     setStatus("Catálogo listo", "");
     setHelp(`${items.length} juego(s) listos. Elige uno para reproducir.`, "ok");
+    updateFavoriteUI();
+
+    const sharedRequest = getSharedRequest();
+    if (sharedRequest && items.some(item => item && item.path === sharedRequest.path)) {
+      catalogSelect.value = sharedRequest.path;
+      await fetchAndLoad(sharedRequest.path, {
+        autoplay: true,
+        prepareAudio: false,
+        trackIndex: sharedRequest.trackIndex,
+        sharedLabel: true
+      });
+    }
 
     return items;
   } catch (error) {
@@ -306,7 +479,7 @@ async function fetchAndLoad(path, options = {}) {
   setHelp("Descargando archivo NSF.", "");
 
   try {
-    if (options.autoplay) {
+    if (options.autoplay && options.prepareAudio !== false) {
       await ensureAudio();
     }
 
@@ -327,10 +500,17 @@ async function fetchAndLoad(path, options = {}) {
       setHelp(`Listo: ${currentName}, Track ${currentTrack + 1}. Toca Play.`, "ok");
     }
 
+    updateShareUrlState();
+    updateFavoriteUI();
+
     if (options.autoplay) {
+      if (options.sharedLabel) {
+        setHelp(`Link cargado: ${currentName}, Track ${currentTrack + 1}.`, "ok");
+      }
+
       await play();
       if (isPlaying) {
-        const prefix = options.randomLabel ? "Random" : options.catalogLabel ? "Catálogo" : "Reproduciendo";
+        const prefix = options.randomLabel ? "Random" : options.sharedLabel ? "Link" : options.catalogLabel ? "Catálogo" : "Reproduciendo";
         setHelp(`${prefix}: ${currentName}, Track ${currentTrack + 1}.`, "ok");
       }
     }
@@ -1357,6 +1537,14 @@ if (randomCatalogBtn) {
     loadRandomCatalogTrack(catalogItems, { autoplay: true });
   });
 }
+if (favoriteBtn) favoriteBtn.addEventListener("click", toggleFavorite);
+if (shareBtn) shareBtn.addEventListener("click", shareCurrentTrack);
+if (favoritesSelect) {
+  favoritesSelect.addEventListener("change", () => {
+    if (favoritesSelect.value) loadFavoriteByKey(favoritesSelect.value);
+    favoritesSelect.value = "";
+  });
+}
 if (loadUrlBtn) loadUrlBtn.addEventListener("click", loadFromUrl);
 if (fileInput) fileInput.addEventListener("change", loadFromFile);
 playBtn.addEventListener("click", play);
@@ -1365,6 +1553,8 @@ stopBtn.addEventListener("click", () => stopPlayback(true));
 
 trackSelect.addEventListener("change", () => {
   setCurrentTrack(Number(trackSelect.value));
+  updateShareUrlState();
+  updateFavoriteUI();
   play();
 });
 

@@ -40,6 +40,16 @@
           <select id="catalogSelect">
             <option value="">No hay archivos cargados</option>
           </select>
+
+          <div class="quickActions" aria-label="Compartir y favoritos">
+            <button id="favoriteBtn" class="secondaryBtn" type="button" disabled>Favorito</button>
+            <button id="shareBtn" class="secondaryBtn" type="button" disabled>Compartir</button>
+          </div>
+
+          <label class="fieldLabel" for="favoritesSelect">Favoritos</label>
+          <select id="favoritesSelect">
+            <option value="">Sin favoritos</option>
+          </select>
         </section>
 
         <section class="panel transportPanel">
@@ -171,7 +181,7 @@
   </main>
 
   <script>
-    window.__chipwaveBuild = "v24-2026-06-02";
+    window.__chipwaveBuild = "v25-2026-06-02";
     window.__gmeRuntimeReady = new Promise((resolve, reject) => {
       window.__resolveGmeRuntime = resolve;
       window.__rejectGmeRuntime = reject;
@@ -196,7 +206,7 @@
       }
     };
   </script>
-  <script src="vendor/libgme.js?v=v24-2026-06-02"></script>
-  <script src="app.js?v=v24-2026-06-02"></script>
+  <script src="vendor/libgme.js?v=v25-2026-06-02"></script>
+  <script src="app.js?v=v25-2026-06-02"></script>
 </body>
 </html>
