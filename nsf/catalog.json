@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-02T18:56:39.260431+00:00",
+  "updatedAt": "2026-06-02T18:57:33.140722+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -55,6 +55,17 @@
       "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/duck-tales/Duck%20Tales%20%28EMU%29.zophar.zip",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/duck-tales/Duck%20Tales%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T18:56:05.074703+00:00"
+    },
+    {
+      "filename": "journey-to-silius.nsf",
+      "path": "nsf/journey-to-silius.nsf",
+      "title": "Journey to Silius",
+      "artist": "Nobuyuki,Marumo,N.Kodaka et al.",
+      "songs": 12,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/journey-to-silius/Journey%20to%20Silius%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/journey-to-silius/Journey%20to%20Silius%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-02T18:57:33.140722+00:00"
     },
     {
       "filename": "megaman3.nsf",
