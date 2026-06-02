@@ -1,4 +1,4 @@
-console.log("ChipWave app build v11 UI loaded");
+console.log("ChipWave app build v12 ideal waveform UI loaded");
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -27,11 +27,11 @@ const ctxs = canvases.map(c => c.getContext("2d"));
 const readouts = [0, 1, 2, 3, 4].map(i => document.getElementById(`readout${i}`));
 
 const CHANNELS = [
-  { name: "Pulse 1" },
-  { name: "Pulse 2" },
-  { name: "Triangle" },
-  { name: "Noise" },
-  { name: "DPCM/Mix" }
+  { name: "Pulse 1", visualType: "pulse" },
+  { name: "Pulse 2", visualType: "pulse" },
+  { name: "Triangle", visualType: "triangle" },
+  { name: "Noise", visualType: "noise" },
+  { name: "DPCM/Mix", visualType: "sample" }
 ];
 
 let audioCtx;
@@ -701,33 +701,27 @@ function drawLoop() {
       ? findStableWaveStart(analyzerPack.time, visibleSamples)
       : Math.max(0, analyzerPack.time.length - visibleSamples);
 
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = mutedChannels[index] ? "rgba(255,107,107,0.72)" : "rgba(141,215,255,0.95)";
-    ctx.beginPath();
-
-    for (let x = 0; x < w; x++) {
-      const sourcePosition = startSample + (x / Math.max(1, w - 1)) * Math.max(1, visibleSamples - 1);
-      const dataIndex = Math.min(analyzerPack.time.length - 1, Math.floor(sourcePosition));
-      const nextIndex = Math.min(analyzerPack.time.length - 1, dataIndex + 1);
-      const mix = sourcePosition - dataIndex;
-      const value = analyzerPack.time[dataIndex] * (1 - mix) + analyzerPack.time[nextIndex] * mix;
-      const y = (value / 255) * h;
-
-      if (x === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-
-    ctx.stroke();
-
-    ctx.lineWidth = 1.4;
-    ctx.strokeStyle = "rgba(215,166,255,0.9)";
-    ctx.beginPath();
-
     const cycles = cyclesToShow;
-    const amp = Math.min(h * 0.34, energy * h * 1.4);
+    const amp = Math.max(12, Math.min(h * 0.36, energy * h * 1.65));
+    const phase = waveStaticEnabled ? 0 : (performance.now() / 1000) * 0.85;
+    const visualType = CHANNELS[index].visualType;
+
+    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = mutedChannels[index] ? "rgba(255,107,107,0.72)" : "rgba(141,215,255,0.96)";
+    ctx.beginPath();
 
     for (let x = 0; x < w; x++) {
-      const y = mid + Math.sin((x / w) * Math.PI * 2 * cycles) * amp;
+      const normalizedX = x / Math.max(1, w - 1);
+      const sample = getDisplayWaveSample(
+        visualType,
+        normalizedX,
+        cycles,
+        phase,
+        analyzerPack.time,
+        startSample,
+        visibleSamples
+      );
+      const y = mid - sample * amp;
 
       if (x === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
@@ -745,12 +739,44 @@ function drawLoop() {
     const mode = hasRealMute() ? "real" : "aprox";
 
     const waveMode = waveStaticEnabled ? "estática" : "dinámica";
+    const visualLabel = getDisplayWaveLabel(CHANNELS[index].visualType);
 
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · PCM ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · forma ${visualLabel} · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · PCM ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
+}
+
+function getDisplayWaveSample(type, normalizedX, cycles, phase, timeData, startSample, visibleSamples) {
+  if (type === "pulse") {
+    const position = ((normalizedX * cycles + phase) % 1 + 1) % 1;
+    return position < 0.5 ? 1 : -1;
+  }
+
+  if (type === "triangle") {
+    const position = ((normalizedX * cycles + phase) % 1 + 1) % 1;
+    return 1 - 4 * Math.abs(position - 0.5);
+  }
+
+  return getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples);
+}
+
+function getAnalyzerWaveSample(timeData, normalizedX, startSample, visibleSamples) {
+  const sourcePosition = startSample + normalizedX * Math.max(1, visibleSamples - 1);
+  const dataIndex = Math.min(timeData.length - 1, Math.floor(sourcePosition));
+  const nextIndex = Math.min(timeData.length - 1, dataIndex + 1);
+  const mix = sourcePosition - dataIndex;
+  const value = timeData[dataIndex] * (1 - mix) + timeData[nextIndex] * mix;
+
+  return Math.max(-1, Math.min(1, (128 - value) / 128));
+}
+
+function getDisplayWaveLabel(type) {
+  if (type === "pulse") return "cuadrada ideal";
+  if (type === "triangle") return "triangular ideal";
+  if (type === "noise") return "ruido real";
+  return "muestra real";
 }
 
 function findStableWaveStart(timeData, visibleSamples) {
