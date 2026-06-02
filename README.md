@@ -1,16 +1,33 @@
-# BitWave Piano
+# ChipWave Visualizer
 
 Aplicación estática para GitHub Pages que:
 
-- recibe un prompt o una URL de audio;
+- recibe un prompt o una URL;
 - extrae la primera URL `http(s)` del texto;
 - reproduce audio en el navegador;
-- muestra cuatro visualizadores de onda basados en bandas de frecuencia;
-- incluye un piano simple con osciladores Web Audio.
+- muestra cuatro visualizadores de onda basados en bandas de frecuencia.
 
-## Limitación importante
+## Importante sobre YouTube
 
-Si la canción viene como audio mezclado (`mp3`, `wav`, `ogg`, etc.), el navegador no puede recuperar los canales originales del chip NES/8-bit. Esta app muestra **4 canales estimados** usando filtros:
+Una URL normal de YouTube no es una URL directa a un archivo de audio. Es una página/reproductor con restricciones, firmas, streaming segmentado y políticas de origen. Por eso un `<audio>` de navegador no puede usar directamente:
+
+```text
+https://www.youtube.com/watch?v=...
+https://youtu.be/...
+```
+
+Opciones válidas:
+
+- usar una URL directa a un archivo `.mp3`, `.wav`, `.ogg`, `.m4a`, `.flac`, etc.;
+- subir un archivo local desde el botón **Subir audio**;
+- alojar el audio dentro del mismo repositorio;
+- crear un backend propio que reciba la URL, obtenga/transcodifique el audio y entregue un stream permitido por CORS.
+
+## Limitación sobre canales 8-bit reales
+
+Si la canción viene como audio mezclado (`mp3`, `wav`, `ogg`, etc.), el navegador no puede recuperar los canales originales del chip NES/8-bit.
+
+Esta app muestra **4 canales estimados** usando filtros:
 
 1. graves,
 2. medios bajos,
@@ -18,12 +35,6 @@ Si la canción viene como audio mezclado (`mp3`, `wav`, `ogg`, etc.), el navegad
 4. brillo/ruido.
 
 Para ver canales reales habría que integrar un parser/emulador para formatos como `NSF`, `VGM`, `MOD`, `XM`, etc., o tener stems/canales separados.
-
-## Uso local
-
-Abre `index.html` directamente en el navegador.
-
-Para URLs externas, el servidor del audio debe permitir CORS. Si no, usa el botón **Subir audio**.
 
 ## Publicar en GitHub Pages
 
@@ -47,8 +58,8 @@ https://TU-USUARIO.github.io/NOMBRE-DEL-REPO/
 
 ## Mejoras futuras recomendadas
 
-- Integrar soporte NSF con un emulador JavaScript para extraer canales reales de NES.
-- Integrar soporte VGM para chips PSG/FM.
-- Añadir drag & drop de archivos.
-- Exportar capturas de los visualizadores como PNG.
-- Añadir sincronización de notas detectadas sobre el teclado.
+- Soporte NSF real con emulador JavaScript.
+- Soporte VGM para chips PSG/FM.
+- Drag & drop de archivos.
+- Exportar capturas de visualizadores.
+- Detección de notas y pitch por canal estimado.

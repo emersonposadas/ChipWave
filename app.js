@@ -10,7 +10,7 @@ const volume = document.getElementById("volume");
 const timeLabel = document.getElementById("timeLabel");
 const statusText = document.getElementById("statusText");
 const statusDot = document.getElementById("statusDot");
-const piano = document.getElementById("piano");
+const helpText = document.getElementById("helpText");
 
 const canvasIds = ["ch0", "ch1", "ch2", "ch3"];
 const canvases = canvasIds.map(id => document.getElementById(id));
@@ -33,14 +33,39 @@ const channels = [
   { label: "Brillo/ruido", type: "highpass", freq: 2600, q: 0.7 }
 ];
 
+const directAudioExtensions = [".mp3", ".wav", ".ogg", ".oga", ".m4a", ".aac", ".flac", ".opus", ".webm"];
+
 function setStatus(text, mode = "") {
   statusText.textContent = text;
   statusDot.className = mode;
 }
 
+function setHelp(text, mode = "") {
+  helpText.textContent = text;
+  helpText.className = `hint ${mode}`;
+}
+
 function extractUrl(text) {
   const match = text.match(/https?:\/\/[^\s"'<>]+/i);
   return match ? match[0] : "";
+}
+
+function isYouTubeUrl(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host === "youtube.com" || host === "youtu.be" || host.endsWith(".youtube.com");
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeDirectAudio(url) {
+  try {
+    const cleanPath = new URL(url).pathname.toLowerCase();
+    return directAudioExtensions.some(ext => cleanPath.endsWith(ext));
+  } catch {
+    return false;
+  }
 }
 
 function formatTime(seconds) {
@@ -185,22 +210,33 @@ function startDrawing() {
   if (!rafId) draw();
 }
 
-function stopDrawing() {
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = null;
-}
-
 loadBtn.addEventListener("click", () => {
   const url = extractUrl(promptInput.value);
+
   if (!url) {
     setStatus("No encontré una URL en el prompt", "error");
+    setHelp("Pega una URL directa de audio o sube un archivo local.", "error");
     return;
+  }
+
+  if (isYouTubeUrl(url)) {
+    setStatus("YouTube no es audio directo", "error");
+    setHelp("Una URL de YouTube no se puede reproducir como archivo de audio desde una app estática. Usa un MP3/OGG/WAV directo, sube un archivo, o agrega un backend que resuelva/transcodifique la fuente.", "error");
+    enableTransport(false);
+    return;
+  }
+
+  if (!looksLikeDirectAudio(url)) {
+    setStatus("URL cargada con advertencia", "");
+    setHelp("La URL no parece terminar en formato de audio. Puede funcionar si el servidor responde con audio y permite CORS.", "");
+  } else {
+    setStatus("URL cargada", "");
+    setHelp("URL cargada. Presiona Play. Si falla, el servidor puede estar bloqueando CORS.", "");
   }
 
   audio.src = url;
   audio.load();
   enableTransport(true);
-  setStatus("URL cargada", "");
 });
 
 fileInput.addEventListener("change", () => {
@@ -210,6 +246,7 @@ fileInput.addEventListener("change", () => {
   audio.load();
   enableTransport(true);
   setStatus(`Archivo cargado: ${file.name}`, "");
+  setHelp("Archivo local cargado. Presiona Play.", "");
 });
 
 playBtn.addEventListener("click", async () => {
@@ -220,7 +257,8 @@ playBtn.addEventListener("click", async () => {
     startDrawing();
   } catch (err) {
     console.error(err);
-    setStatus("No se pudo reproducir. Revisa CORS o formato.", "error");
+    setStatus("No se pudo reproducir", "error");
+    setHelp("Revisa que sea una URL directa de audio y que el servidor permita CORS. Las páginas de YouTube, SoundCloud u otros reproductores no funcionan como fuente directa.", "error");
   }
 });
 
@@ -242,6 +280,7 @@ audio.addEventListener("ended", () => setStatus("Finalizado", ""));
 
 audio.addEventListener("error", () => {
   setStatus("Error cargando audio", "error");
+  setHelp("No se pudo cargar el audio. Usa una URL directa a .mp3, .wav, .ogg, .m4a, .flac, o sube el archivo desde tu equipo.", "error");
 });
 
 seek.addEventListener("input", () => {
@@ -257,81 +296,4 @@ seek.addEventListener("change", () => {
 volume.addEventListener("input", () => {
   if (masterGain) masterGain.gain.value = Number(volume.value);
   audio.volume = Number(volume.value);
-});
-
-/* Piano simple */
-const notes = [
-  ["C4", 261.63, "white", "A"],
-  ["C#4", 277.18, "black", "W"],
-  ["D4", 293.66, "white", "S"],
-  ["D#4", 311.13, "black", "E"],
-  ["E4", 329.63, "white", "D"],
-  ["F4", 349.23, "white", "F"],
-  ["F#4", 369.99, "black", "T"],
-  ["G4", 392.00, "white", "G"],
-  ["G#4", 415.30, "black", "Y"],
-  ["A4", 440.00, "white", "H"],
-  ["A#4", 466.16, "black", "U"],
-  ["B4", 493.88, "white", "J"],
-  ["C5", 523.25, "white", "K"]
-];
-
-const activeOsc = new Map();
-
-notes.forEach(([name, freq, type, key]) => {
-  const el = document.createElement("button");
-  el.className = `key ${type === "black" ? "black" : ""}`;
-  el.textContent = `${name}\n${key}`;
-  el.dataset.note = name;
-  el.dataset.freq = freq;
-  piano.appendChild(el);
-
-  el.addEventListener("pointerdown", () => playNote(name, freq, el));
-  el.addEventListener("pointerup", () => stopNote(name, el));
-  el.addEventListener("pointerleave", () => stopNote(name, el));
-});
-
-async function playNote(name, freq, el) {
-  await ensureAudioGraph();
-  if (activeOsc.has(name)) return;
-
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-
-  osc.type = "square";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.18, audioCtx.currentTime + 0.02);
-
-  osc.connect(gain);
-  gain.connect(masterGain);
-  osc.start();
-
-  activeOsc.set(name, { osc, gain });
-  el?.classList.add("active");
-}
-
-function stopNote(name, el) {
-  const node = activeOsc.get(name);
-  if (!node || !audioCtx) return;
-
-  node.gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.04);
-  node.osc.stop(audioCtx.currentTime + 0.05);
-  activeOsc.delete(name);
-  el?.classList.remove("active");
-}
-
-window.addEventListener("keydown", event => {
-  if (event.repeat) return;
-  const item = notes.find(n => n[3] === event.key.toUpperCase());
-  if (!item) return;
-  const el = [...document.querySelectorAll(".key")].find(k => k.dataset.note === item[0]);
-  playNote(item[0], item[1], el);
-});
-
-window.addEventListener("keyup", event => {
-  const item = notes.find(n => n[3] === event.key.toUpperCase());
-  if (!item) return;
-  const el = [...document.querySelectorAll(".key")].find(k => k.dataset.note === item[0]);
-  stopNote(item[0], el);
 });

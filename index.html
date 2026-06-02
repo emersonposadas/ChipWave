@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>BitWave Piano - 8-bit Channel Visualizer</title>
+  <title>ChipWave Visualizer</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -11,9 +11,9 @@
     <header class="hero">
       <div>
         <p class="eyebrow">GitHub Pages / Web Audio API</p>
-        <h1>BitWave Piano</h1>
+        <h1>ChipWave Visualizer</h1>
         <p class="subtitle">
-          Carga una URL de audio 8-bit, reprodúcela y visualiza cuatro canales estimados como ondas.
+          Carga una URL directa de audio 8-bit o sube un archivo para reproducirlo y visualizar cuatro canales estimados.
         </p>
       </div>
       <div class="meter">
@@ -23,7 +23,7 @@
     </header>
 
     <section class="panel">
-      <label for="prompt">Prompt o URL</label>
+      <label for="prompt">Prompt o URL directa de audio</label>
       <textarea id="prompt" spellcheck="false" placeholder="Ejemplo: analiza esta canción 8-bit https://example.com/song.mp3"></textarea>
 
       <div class="controls">
@@ -46,8 +46,8 @@
         </label>
       </div>
 
-      <p class="hint">
-        Nota: si la URL externa bloquea CORS, usa “Subir audio” o aloja el archivo en el mismo repo.
+      <p class="hint" id="helpText">
+        Usa una URL directa a un archivo de audio: .mp3, .wav, .ogg, .m4a o .flac. YouTube no funciona directamente en el navegador como fuente de audio.
       </p>
     </section>
 
@@ -87,14 +87,6 @@
         <canvas id="ch3" width="1200" height="260"></canvas>
         <p id="readout3">—</p>
       </article>
-    </section>
-
-    <section class="panel pianoPanel">
-      <div>
-        <h2>Piano simple</h2>
-        <p class="hint">Toca notas con el mouse o con el teclado: A S D F G H J K.</p>
-      </div>
-      <div id="piano" class="piano" aria-label="Piano"></div>
     </section>
 
     <audio id="audio" crossorigin="anonymous"></audio>
