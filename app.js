@@ -77,6 +77,48 @@ function waitForGmeRuntime() {
   return Promise.reject(new Error("No existe __gmeRuntimeReady. Revisa que index.html cargue el bloque Module antes de vendor/libgme.js."));
 }
 
+function getMissingGmeRuntimeSymbols() {
+  const checks = {
+    "window.Module": !!window.Module,
+    "Module.ccall": !!window.Module?.ccall,
+    "Module.getValue": !!window.Module?.getValue,
+    "Module._malloc": !!window.Module?._malloc,
+    "Module._free": !!window.Module?._free,
+    "Module.HEAPU8": !!window.Module?.HEAPU8,
+    "Module.HEAP16": !!window.Module?.HEAP16,
+    "Module._gme_open_data": !!window.Module?._gme_open_data,
+    "Module._gme_play": !!window.Module?._gme_play,
+    "Module._gme_mute_voice": !!window.Module?._gme_mute_voice
+  };
+
+  return Object.entries(checks)
+    .filter(([, ok]) => !ok)
+    .map(([name]) => name);
+}
+
+function assertGmeRuntimeReady() {
+  const missing = getMissingGmeRuntimeSymbols();
+
+  const criticalMissing = missing.filter(name => {
+    return !["Module._gme_mute_voice"].includes(name);
+  });
+
+  if (criticalMissing.length) {
+    console.error("ChipWave GME runtime missing symbols:", {
+      missing,
+      ModuleKeys: window.Module ? Object.keys(window.Module).slice(0, 80) : [],
+      scriptHint: "Check Network tab for vendor/libgme.js and vendor/libgme.wasm 200 responses."
+    });
+
+    throw new Error(
+      "libgme cargó incompleto. Faltan: " +
+      criticalMissing.join(", ") +
+      ". Revisa en DevTools → Network que vendor/libgme.js y vendor/libgme.wasm devuelvan 200, no 404/HTML."
+    );
+  }
+}
+
+
 
 function setStatus(text, mode = "") {
   statusText.textContent = text;
@@ -261,9 +303,7 @@ async function loadNsfBytes(bytes, name) {
 async function ensureAudio() {
   await waitForGmeRuntime();
 
-  if (!window.Module || !Module.ccall || !Module._malloc || !Module._free || !Module.HEAPU8 || !Module.HEAP16) {
-    throw new Error("No se cargó vendor/libgme.js correctamente. Ejecuta el workflow Build libgme for browser o revisa vendor/libgme.js/vendor/libgme.wasm.");
-  }
+  assertGmeRuntimeReady();
 
   if (!audioCtx) {
     audioCtx = new AudioContext();
@@ -751,3 +791,15 @@ window.addEventListener("error", event => {
 setMuteMode("libgme pendiente hasta Play");
 updateMuteUIOnly();
 loadCatalog();
+
+setTimeout(() => {
+  if (window.Module) {
+    console.log("ChipWave libgme runtime check after load:", {
+      runtimeInitialized: Module.runtimeInitialized || Module.calledRun || false,
+      missing: typeof getMissingGmeRuntimeSymbols === "function" ? getMissingGmeRuntimeSymbols() : "diagnostic function unavailable",
+      moduleKeys: Object.keys(Module).slice(0, 80)
+    });
+  } else {
+    console.error("ChipWave: window.Module is missing after page load.");
+  }
+}, 1500);

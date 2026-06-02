@@ -149,6 +149,7 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
   </main>
 
   <script>
+    window.__chipwaveBuild = "v7-2026-06-02";
     window.__gmeRuntimeReady = new Promise((resolve, reject) => {
       window.__resolveGmeRuntime = resolve;
       window.__rejectGmeRuntime = reject;
@@ -156,7 +157,7 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
 
     window.Module = {
       locateFile(path) {
-        if (path.endsWith(".wasm")) return "vendor/" + path;
+        if (path.endsWith(".wasm")) return "vendor/" + path + "?v=" + window.__chipwaveBuild;
         return path;
       },
       onRuntimeInitialized() {
@@ -164,10 +165,16 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
         if (typeof window.__resolveGmeRuntime === "function") {
           window.__resolveGmeRuntime();
         }
+      },
+      print(text) {
+        console.log("[libgme]", text);
+      },
+      printErr(text) {
+        console.error("[libgme]", text);
       }
     };
   </script>
-  <script src="vendor/libgme.js"></script>
-  <script src="app.js"></script>
+  <script src="vendor/libgme.js?v=v7-2026-06-02"></script>
+  <script src="app.js?v=v7-2026-06-02"></script>
 </body>
 </html>
