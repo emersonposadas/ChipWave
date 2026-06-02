@@ -1,0 +1,105 @@
+name: Import NSF
+
+on:
+  workflow_dispatch:
+    inputs:
+      nsf_url:
+        description: "URL directa del archivo .nsf/.nsfe a importar"
+        required: true
+        type: string
+      filename:
+        description: "Nombre opcional para guardar, ejemplo mega-man-3.nsf"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  import-nsf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Prepare filename
+        id: vars
+        shell: bash
+        run: |
+          mkdir -p nsf
+
+          INPUT_NAME="${{ inputs.filename }}"
+          URL="${{ inputs.nsf_url }}"
+
+          if [ -z "$INPUT_NAME" ]; then
+            INPUT_NAME="$(basename "${URL%%\?*}")"
+          fi
+
+          SAFE_NAME="$(echo "$INPUT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g')"
+
+          if [[ ! "$SAFE_NAME" =~ \.(nsf|nsfe)$ ]]; then
+            SAFE_NAME="${SAFE_NAME}.nsf"
+          fi
+
+          echo "filename=$SAFE_NAME" >> "$GITHUB_OUTPUT"
+          echo "path=nsf/$SAFE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Download NSF
+        shell: bash
+        run: |
+          curl -L --fail --retry 3 --connect-timeout 20 \
+            -A "Mozilla/5.0 GitHubActions NSF Importer" \
+            "${{ inputs.nsf_url }}" \
+            -o "${{ steps.vars.outputs.path }}"
+
+      - name: Validate and update catalog
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          from datetime import datetime, timezone
+
+          path = Path("${{ steps.vars.outputs.path }}")
+          data = path.read_bytes()
+
+          if len(data) < 128 or data[:5] != b"NESM\x1a":
+              raise SystemExit(f"{path} is not a valid NSF file")
+
+          def read_ascii(start, length):
+              raw = data[start:start+length].split(b"\x00", 1)[0]
+              return raw.decode("latin-1", errors="replace").strip()
+
+          item = {
+              "filename": path.name,
+              "path": path.as_posix(),
+              "title": read_ascii(14, 32) or path.stem,
+              "artist": read_ascii(46, 32) or "Unknown",
+              "songs": data[6],
+              "startSong": data[7],
+              "importedAt": datetime.now(timezone.utc).isoformat()
+          }
+
+          catalog_path = Path("nsf/catalog.json")
+          if catalog_path.exists():
+              catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+          else:
+              catalog = {"updatedAt": None, "items": []}
+
+          items = [x for x in catalog.get("items", []) if x.get("path") != item["path"]]
+          items.append(item)
+          items.sort(key=lambda x: (x.get("title") or x.get("filename") or "").lower())
+
+          catalog["updatedAt"] = item["importedAt"]
+          catalog["items"] = items
+
+          catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False), encoding="utf-8")
+
+      - name: Commit imported NSF
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add nsf/
+          git commit -m "Import NSF: ${{ steps.vars.outputs.filename }}" || echo "No changes to commit"
+          git push
