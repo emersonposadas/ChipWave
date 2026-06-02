@@ -1,4 +1,4 @@
-console.log("ChipWave app build v13 animated waveform UI loaded");
+console.log("ChipWave app build v15 analyzer-volume waveform UI loaded");
 const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
@@ -7,6 +7,7 @@ const pauseBtn = document.getElementById("pauseBtn");
 const stopBtn = document.getElementById("stopBtn");
 const trackSelect = document.getElementById("trackSelect");
 const volume = document.getElementById("volume");
+const volumeValue = document.getElementById("volumeValue");
 const statusText = document.getElementById("statusText");
 const statusDot = document.getElementById("statusDot");
 const helpText = document.getElementById("helpText");
@@ -57,6 +58,7 @@ const mutedChannels = [false, false, false, false, false];
 
 let waveCyclesToShow = Number(waveCyclesSelect?.value || 3);
 let waveStaticEnabled = Boolean(waveStaticToggle?.checked);
+const channelVisualState = CHANNELS.map(() => ({ frequency: 0, amplitude: 0, phase: 0, lastFrameTime: 0 }));
 
 let gmeRuntimeReadyPromise = null;
 
@@ -691,20 +693,27 @@ function drawLoop() {
     analyzerPack.analyser.getByteTimeDomainData(analyzerPack.time);
     analyzerPack.analyser.getByteFrequencyData(analyzerPack.freq);
 
-    const peak = findPeak(analyzerPack.freq, audioCtx?.sampleRate || 44100, analyzerPack.analyser.fftSize);
+    const fftPeak = findPeak(analyzerPack.freq, audioCtx?.sampleRate || 44100, analyzerPack.analyser.fftSize);
     const energy = rms(analyzerPack.time);
+    const rawAmplitude = peakAmplitude(analyzerPack.time);
     const sampleRate = audioCtx?.sampleRate || 44100;
+    const measuredFrequency = estimateFrequencyFromTimeData(analyzerPack.time, sampleRate) || fftPeak.frequency;
+    const smoothed = updateChannelVisualState(index, measuredFrequency, rawAmplitude, performance.now());
+    // Visual amplitude comes from the analyzed audio data, not from the master volume slider.
+    // This keeps the oscilloscope faithful to the generated signal while the slider only controls listening level.
+    const dataAmplitude = mutedChannels[index] ? 0 : smoothed.amplitude;
+    const effectiveAmplitude = dataAmplitude;
     const cyclesToShow = waveCyclesToShow || 3;
-    const samplesPerCycle = peak.frequency > 0 ? sampleRate / peak.frequency : analyzerPack.time.length;
+    const displayFrequency = Math.max(0, smoothed.frequency);
+    const samplesPerCycle = displayFrequency > 0 ? sampleRate / displayFrequency : analyzerPack.time.length;
     const visibleSamples = Math.max(16, Math.min(analyzerPack.time.length, Math.round(samplesPerCycle * cyclesToShow)));
     const startSample = waveStaticEnabled
       ? findStableWaveStart(analyzerPack.time, visibleSamples)
       : Math.max(0, analyzerPack.time.length - visibleSamples);
 
     const cycles = cyclesToShow;
-    const baseAmp = Math.max(18, Math.min(h * 0.38, energy * h * 1.75));
-    const scrollRate = Math.max(0.65, Math.min(5.5, peak.frequency / 120));
-    const phase = waveStaticEnabled ? 0 : (performance.now() / 1000) * scrollRate;
+    const baseAmp = Math.min(h * 0.42, Math.max(2, effectiveAmplitude * h * 0.82));
+    const phase = waveStaticEnabled ? 0 : smoothed.phase;
     const visualType = CHANNELS[index].visualType;
 
     drawScopeGrid(ctx, w, h, mid, cyclesToShow);
@@ -725,7 +734,7 @@ function drawLoop() {
         visibleSamples,
         waveStaticEnabled
       );
-      const movement = waveStaticEnabled ? 1 : getAnimatedEnvelope(normalizedX, phase, energy);
+      const movement = waveStaticEnabled ? 1 : getAnimatedEnvelope(normalizedX, phase, effectiveAmplitude);
       const y = mid - sample * baseAmp * movement;
 
       if (x === 0) ctx.moveTo(x, y);
@@ -741,10 +750,88 @@ function drawLoop() {
     const visualLabel = getDisplayWaveLabel(CHANNELS[index].visualType);
 
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · forma ${visualLabel} · pico ${Math.round(peak.frequency)} Hz · energía ${(energy * 100).toFixed(1)}% · PCM ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
+      `${CHANNELS[index].name} · ${muteState} (${mode}) · ${cyclesToShow} ciclos · onda ${waveMode} · forma ${visualLabel} · frecuencia ${Math.round(displayFrequency)} Hz · amplitud por datos ${(effectiveAmplitude * 100).toFixed(1)}% · ventana ${formatVisibleWindowMs(cyclesToShow, displayFrequency)} · PCM real ${(lastPcmPeak * 100).toFixed(1)}% · ${gme ? gme.voiceCount + " voces reportadas" : "sin core activo"}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
+}
+
+function getMasterVolumeAmount() {
+  const value = Number(volume?.value ?? 1);
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+}
+
+function updateVolumeLabel() {
+  if (volumeValue) volumeValue.textContent = `${Math.round(getMasterVolumeAmount() * 100)}%`;
+}
+
+function updateChannelVisualState(index, measuredFrequency, measuredAmplitude, nowMs) {
+  const state = channelVisualState[index];
+  const safeFrequency = Number.isFinite(measuredFrequency) && measuredFrequency > 0 ? measuredFrequency : state.frequency || 0;
+  const safeAmplitude = Number.isFinite(measuredAmplitude) ? Math.max(0, Math.min(1, measuredAmplitude)) : 0;
+
+  state.frequency = state.frequency ? state.frequency * 0.82 + safeFrequency * 0.18 : safeFrequency;
+  state.amplitude = state.amplitude ? state.amplitude * 0.72 + safeAmplitude * 0.28 : safeAmplitude;
+
+  if (!state.lastFrameTime) state.lastFrameTime = nowMs;
+  const deltaSeconds = Math.max(0, Math.min(0.08, (nowMs - state.lastFrameTime) / 1000));
+  state.lastFrameTime = nowMs;
+
+  const visualCyclesPerSecond = Math.max(0.05, Math.min(7, state.frequency / 120));
+  state.phase = (state.phase + deltaSeconds * visualCyclesPerSecond) % 1;
+
+  return state;
+}
+
+function peakAmplitude(timeData) {
+  let peak = 0;
+
+  for (const value of timeData) {
+    const normalized = Math.abs((value - 128) / 128);
+    if (normalized > peak) peak = normalized;
+  }
+
+  return peak;
+}
+
+function estimateFrequencyFromTimeData(timeData, sampleRate) {
+  if (!timeData?.length || !sampleRate) return 0;
+
+  let mean = 0;
+  for (const value of timeData) mean += value;
+  mean /= timeData.length;
+
+  const crossings = [];
+  for (let i = 1; i < timeData.length; i++) {
+    const previous = timeData[i - 1] - mean;
+    const current = timeData[i] - mean;
+
+    if (previous < 0 && current >= 0) {
+      const fraction = current === previous ? 0 : -previous / (current - previous);
+      crossings.push(i - 1 + fraction);
+    }
+  }
+
+  if (crossings.length < 2) return 0;
+
+  const periods = [];
+  for (let i = 1; i < crossings.length; i++) {
+    const period = crossings[i] - crossings[i - 1];
+    if (period > 4) periods.push(period);
+  }
+
+  if (!periods.length) return 0;
+
+  periods.sort((a, b) => a - b);
+  const medianPeriod = periods[Math.floor(periods.length / 2)];
+  const frequency = sampleRate / medianPeriod;
+
+  return Number.isFinite(frequency) && frequency > 0 ? frequency : 0;
+}
+
+function formatVisibleWindowMs(cycles, frequency) {
+  if (!frequency || frequency <= 0) return "— ms";
+  return `${(cycles / frequency * 1000).toFixed(2)} ms`;
 }
 
 function getDisplayWaveSample(type, normalizedX, cycles, phase, timeData, startSample, visibleSamples, staticMode = false) {
@@ -888,6 +975,7 @@ trackSelect.addEventListener("change", () => {
 
 volume.addEventListener("input", () => {
   if (masterGain) masterGain.gain.value = Number(volume.value);
+  updateVolumeLabel();
 });
 
 waveCyclesSelect?.addEventListener("change", () => {
@@ -916,6 +1004,7 @@ window.addEventListener("error", event => {
 
 setMuteMode("libgme v11 pendiente hasta Play");
 updateMuteUIOnly();
+updateVolumeLabel();
 loadCatalog();
 
 setTimeout(() => {
