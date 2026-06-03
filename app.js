@@ -5,6 +5,9 @@ const fileInput = document.getElementById("fileInput");
 const playBtn = document.getElementById("playBtn");
 const pauseBtn = document.getElementById("pauseBtn");
 const stopBtn = document.getElementById("stopBtn");
+const previousBtn = document.getElementById("previousBtn");
+const nextBtn = document.getElementById("nextBtn");
+const randomTransportBtn = document.getElementById("randomTransportBtn");
 const trackSelect = document.getElementById("trackSelect");
 const volume = document.getElementById("volume");
 const volumeValue = document.getElementById("volumeValue");
@@ -18,7 +21,6 @@ const songCountEl = document.getElementById("songCount");
 const muteModeEl = document.getElementById("muteMode");
 const catalogSelect = document.getElementById("catalogSelect");
 const loadCatalogBtn = document.getElementById("loadCatalogBtn");
-const randomCatalogBtn = document.getElementById("randomCatalogBtn");
 const favoriteBtn = document.getElementById("favoriteBtn");
 const shareBtn = document.getElementById("shareBtn");
 const favoritesSelect = document.getElementById("favoritesSelect");
@@ -26,6 +28,11 @@ const refreshCatalogBtn = document.getElementById("refreshCatalogBtn");
 const unmuteAllBtn = document.getElementById("unmuteAllBtn");
 const waveCyclesSelect = document.getElementById("waveCycles");
 const waveStaticToggle = document.getElementById("waveStatic");
+const playerTitleEl = document.getElementById("playerTitle");
+const playerTrackEl = document.getElementById("playerTrack");
+const playerContextEl = document.querySelector(".playerContext");
+const playerScopeCanvas = document.getElementById("playerScope");
+const playerScopeCtx = playerScopeCanvas ? playerScopeCanvas.getContext("2d") : null;
 
 const canvases = ["ch0", "ch1", "ch2", "ch3", "ch4"].map(id => document.getElementById(id));
 const ctxs = canvases.map(c => c.getContext("2d"));
@@ -79,9 +86,11 @@ const mutedChannels = [false, false, false, false, false];
 let waveCyclesToShow = Number((waveCyclesSelect && waveCyclesSelect.value) || 3);
 let waveStaticEnabled = Boolean(waveStaticToggle && waveStaticToggle.checked);
 const channelVisualState = CHANNELS.map(() => ({ frequency: 0, amplitude: 0, phase: 0, lastFrameTime: 0 }));
-let initialRandomAutoplayDone = false;
 let catalogItems = [];
 let favoriteItems = readFavorites();
+let deferredSharedAutoplayArmed = false;
+let sharedAutoplayRetryCount = 0;
+let sharedAutoplayRetryTimer = 0;
 
 let gmeRuntimeReadyPromise = null;
 
@@ -156,12 +165,102 @@ function setStatus(text, mode = "") {
 }
 
 function setHelp(text, mode = "") {
-  helpText.textContent = text;
-  helpText.className = `hint ${mode}`;
+  if (helpText) {
+    helpText.textContent = text;
+    helpText.className = `hint ${mode}`;
+  }
+
+  if (playerContextEl && text) {
+    playerContextEl.textContent = getPlayerContextText(text, mode);
+    playerContextEl.className = `playerContext ${mode}`;
+  }
+}
+
+function getPlayerContextText(text, mode = "") {
+  if (mode === "error") return text;
+  if (/random/i.test(text)) return "Shuffle activo";
+  if (/reproduciendo|reproduce|reproducción/i.test(text)) return "Reproduciendo";
+  if (/pausado/i.test(text)) return "Pausado";
+  if (/detenido/i.test(text)) return "Detenido";
+  if (/favorito/i.test(text)) return text;
+  if (/compart/i.test(text) || /copiado/i.test(text)) return "Link listo";
+  if (/activando audio/i.test(text)) return "Activando audio";
+  if (/activar audio|toca/i.test(text)) return "Toca para activar audio";
+  if (/cargando|descargando|preparando/i.test(text)) return "Cargando";
+  if (/listo|cargado/i.test(text)) return "Listo para reproducir";
+  return "NSF · 5 canales en vivo";
 }
 
 function setMuteMode(text) {
   if (muteModeEl) muteModeEl.textContent = text;
+}
+
+function getCurrentDisplayTitle() {
+  const catalogItem = getCurrentCatalogItem();
+  return (currentInfo && currentInfo.title) || (catalogItem && catalogItem.title) || currentName || "ChipWave";
+}
+
+function updatePlayerSummary() {
+  if (playerTitleEl) playerTitleEl.textContent = currentBytes ? getCurrentDisplayTitle() : "Seleccionando primer NSF...";
+  if (playerTrackEl) playerTrackEl.textContent = currentBytes ? `Track ${currentTrack + 1}` : "Track --";
+  if (playerContextEl && currentBytes && !playerContextEl.textContent.trim()) {
+    playerContextEl.textContent = "NSF · 5 canales en vivo";
+  }
+}
+
+function armDeferredSharedAutoplay() {
+  if (deferredSharedAutoplayArmed || isPlaying || !currentBytes) return;
+
+  deferredSharedAutoplayArmed = true;
+  setHelp("Toca para activar audio", "ok");
+
+  const retry = async () => {
+    const played = await play();
+    if (played) {
+      deferredSharedAutoplayArmed = false;
+      cleanup();
+      clearTimeout(sharedAutoplayRetryTimer);
+    }
+  };
+
+  const cleanup = () => {
+    window.removeEventListener("pointerdown", retry);
+    window.removeEventListener("click", retry);
+    window.removeEventListener("keydown", retry);
+    window.removeEventListener("touchstart", retry);
+    window.removeEventListener("focus", retry);
+    document.removeEventListener("visibilitychange", retryOnVisible);
+  };
+
+  const retryOnVisible = () => {
+    if (!document.hidden) retry();
+  };
+
+  window.addEventListener("pointerdown", retry, { once: true });
+  window.addEventListener("click", retry, { once: true });
+  window.addEventListener("keydown", retry, { once: true });
+  window.addEventListener("touchstart", retry, { once: true });
+  window.addEventListener("focus", retry, { once: true });
+  document.addEventListener("visibilitychange", retryOnVisible);
+
+  sharedAutoplayRetryCount = 0;
+  scheduleSharedAutoplayRetry(retry);
+}
+
+function scheduleSharedAutoplayRetry(retry) {
+  if (isPlaying || sharedAutoplayRetryCount >= 4) return;
+
+  const delays = [250, 900, 1800, 3200];
+  const delay = delays[sharedAutoplayRetryCount] || 3200;
+  sharedAutoplayRetryCount += 1;
+
+  sharedAutoplayRetryTimer = window.setTimeout(async () => {
+    if (isPlaying || !currentBytes) return;
+    await retry();
+    if (!isPlaying && deferredSharedAutoplayArmed) {
+      scheduleSharedAutoplayRetry(retry);
+    }
+  }, delay);
 }
 
 function extractUrlOrPath(text) {
@@ -234,6 +333,7 @@ function getShareUrl(path = catalogSelect.value, track = currentTrack) {
   const url = new URL(window.location.href);
   url.searchParams.set("game", path);
   url.searchParams.set("track", String(Math.max(1, Number(track) + 1)));
+  url.searchParams.set("autoplay", "1");
   return url.toString();
 }
 
@@ -241,12 +341,14 @@ function getSharedRequest() {
   const params = new URLSearchParams(window.location.search);
   const path = params.get("game") || params.get("nsf") || "";
   const trackParam = Number(params.get("track") || "1");
+  const autoplayParam = params.get("autoplay") || params.get("play") || "";
 
   if (!path) return null;
 
   return {
     path,
-    trackIndex: Math.max(0, (Number.isFinite(trackParam) ? trackParam : 1) - 1)
+    trackIndex: Math.max(0, (Number.isFinite(trackParam) ? trackParam : 1) - 1),
+    autoplay: autoplayParam !== "0" && autoplayParam.toLowerCase() !== "false"
   };
 }
 
@@ -255,7 +357,8 @@ function updateFavoriteUI() {
     const key = getCurrentFavoriteKey();
     const saved = Boolean(key && favoriteItems.some(item => getFavoriteKey(item.path, item.track) === key));
     favoriteBtn.disabled = !key;
-    favoriteBtn.textContent = saved ? "Quitar favorito" : "Favorito";
+    favoriteBtn.classList.toggle("saved", saved);
+    favoriteBtn.setAttribute("aria-label", saved ? "Quitar favorito" : "Guardar favorito");
   }
 
   if (shareBtn) {
@@ -384,20 +487,23 @@ async function loadCatalog() {
       catalogSelect.appendChild(option);
     }
 
-    if (randomCatalogBtn) randomCatalogBtn.disabled = false;
+    if (randomTransportBtn) randomTransportBtn.disabled = false;
     setStatus("Catálogo listo", "");
-    setHelp(`${items.length} juego(s) listos. Elige uno para reproducir.`, "ok");
+    setHelp(`${items.length} juego(s) listos. Preparando el reproductor.`, "ok");
     updateFavoriteUI();
 
     const sharedRequest = getSharedRequest();
     if (sharedRequest && items.some(item => item && item.path === sharedRequest.path)) {
       catalogSelect.value = sharedRequest.path;
       await fetchAndLoad(sharedRequest.path, {
-        autoplay: true,
+        autoplay: sharedRequest.autoplay,
         prepareAudio: false,
         trackIndex: sharedRequest.trackIndex,
-        sharedLabel: true
+        sharedLabel: true,
+        sharedAutoplay: sharedRequest.autoplay
       });
+    } else {
+      await loadInitialCatalogTrack(items);
     }
 
     return items;
@@ -405,10 +511,23 @@ async function loadCatalog() {
     console.warn(error);
     catalogItems = [];
     catalogSelect.innerHTML = '<option value="">No hay catálogo disponible</option>';
-    if (randomCatalogBtn) randomCatalogBtn.disabled = true;
+    if (randomTransportBtn) randomTransportBtn.disabled = true;
     setHelp("No se pudo cargar nsf/catalog.json. Ejecuta el workflow de importación o sube archivos manualmente.", "error");
     return [];
   }
+}
+
+async function loadInitialCatalogTrack(items = catalogItems) {
+  const firstPlayable = items.find(item => item && item.path);
+  if (!firstPlayable || currentBytes) return false;
+
+  catalogSelect.value = firstPlayable.path;
+  return fetchAndLoad(firstPlayable.path, {
+    autoplay: false,
+    prepareAudio: false,
+    catalogLabel: true,
+    initialLabel: true
+  });
 }
 
 async function loadFromCatalog(options = {}) {
@@ -449,10 +568,10 @@ async function loadRandomCatalogTrack(items = catalogItems, options = {}) {
 }
 
 function updateMetadata() {
-  fileNameEl.textContent = currentName;
-  songTitleEl.textContent = (currentInfo && currentInfo.title) || "—";
-  artistEl.textContent = (currentInfo && currentInfo.artist) || "—";
-  songCountEl.textContent = currentInfo && currentInfo.songs ? String(currentInfo.songs) : "—";
+  if (fileNameEl) fileNameEl.textContent = currentName;
+  if (songTitleEl) songTitleEl.textContent = (currentInfo && currentInfo.title) || "—";
+  if (artistEl) artistEl.textContent = (currentInfo && currentInfo.artist) || "—";
+  if (songCountEl) songCountEl.textContent = currentInfo && currentInfo.songs ? String(currentInfo.songs) : "—";
 
   trackSelect.innerHTML = "";
   const count = (currentInfo && currentInfo.songs) || 1;
@@ -470,8 +589,11 @@ function updateMetadata() {
   trackSelect.value = String(currentTrack);
   trackSelect.disabled = false;
   playBtn.disabled = false;
-  pauseBtn.disabled = false;
+  if (pauseBtn) pauseBtn.disabled = false;
   stopBtn.disabled = false;
+  if (previousBtn) previousBtn.disabled = count <= 1;
+  if (nextBtn) nextBtn.disabled = count <= 1;
+  updatePlayerSummary();
 }
 
 async function fetchAndLoad(path, options = {}) {
@@ -498,21 +620,29 @@ async function fetchAndLoad(path, options = {}) {
 
     if (options.requiresUserPlay) {
       setHelp(`Listo: ${currentName}, Track ${currentTrack + 1}. Toca Play.`, "ok");
+    } else if (options.initialLabel) {
+      setHelp(`${getCurrentDisplayTitle()} está cargado. Toca Play para escuchar y ver las ondas reales.`, "ok");
     }
 
     updateShareUrlState();
     updateFavoriteUI();
+    updatePlayerSummary();
 
     if (options.autoplay) {
       if (options.sharedLabel) {
-        setHelp(`Link cargado: ${currentName}, Track ${currentTrack + 1}.`, "ok");
+        setHelp(options.sharedAutoplay ? "Activando audio" : `Link cargado: ${currentName}, Track ${currentTrack + 1}.`, "ok");
       }
 
-      await play();
-      if (isPlaying) {
-        const prefix = options.randomLabel ? "Random" : options.sharedLabel ? "Link" : options.catalogLabel ? "Catálogo" : "Reproduciendo";
-        setHelp(`${prefix}: ${currentName}, Track ${currentTrack + 1}.`, "ok");
+      const played = await play();
+      if (options.sharedAutoplay && !played) {
+        armDeferredSharedAutoplay();
       }
+      if (played) {
+        const prefix = options.randomLabel ? "Random" : options.catalogLabel ? "Catálogo" : "Reproduciendo";
+        setHelp(options.sharedLabel ? "Reproduciendo" : `${prefix}: ${currentName}, Track ${currentTrack + 1}.`, "ok");
+      }
+    } else if (options.sharedLabel) {
+      setHelp(`${getCurrentDisplayTitle()} está cargado.`, "ok");
     }
 
     return true;
@@ -570,6 +700,7 @@ async function loadNsfBytes(bytes, name) {
   updateMetadata();
   setStatus("NSF cargado", "");
   setHelp("NSF cargado. Elige un track y presiona Play.", "ok");
+  updatePlayerSummary();
   return true;
 }
 
@@ -587,6 +718,32 @@ function setCurrentTrack(trackIndex) {
 
   currentTrack = boundedTrack;
   trackSelect.value = String(boundedTrack);
+  updatePlayerSummary();
+}
+
+function getTrackCount() {
+  return trackSelect.options.length || (currentInfo && currentInfo.songs) || 1;
+}
+
+async function playTrackOffset(offset) {
+  await selectTrackOffset(offset, true);
+}
+
+async function selectTrackOffset(offset, autoplay = isPlaying) {
+  if (!currentBytes) return;
+
+  const count = getTrackCount();
+  const nextTrack = (currentTrack + offset + count) % count;
+  setCurrentTrack(nextTrack);
+  updateShareUrlState();
+  updateFavoriteUI();
+
+  if (autoplay) {
+    await play();
+  } else {
+    setStatus("NSF cargado", "");
+    setHelp(`${getCurrentDisplayTitle()} · Track ${currentTrack + 1}.`, "ok");
+  }
 }
 
 async function ensureAudio() {
@@ -990,7 +1147,7 @@ function renderChannelScopes() {
 async function play() {
   if (!currentBytes) {
     setStatus("No hay NSF cargado", "error");
-    return;
+    return false;
   }
 
   try {
@@ -998,20 +1155,25 @@ async function play() {
     openGme(currentTrack);
     isPlaying = true;
     setStatus("Reproduciendo", "playing");
+    setHelp("Reproduciendo", "ok");
 
     if (!rafId) {
       rafId = requestAnimationFrame(drawLoop);
     }
+
+    return true;
   } catch (error) {
     console.error(error);
     setStatus("Error reproduciendo NSF", "error");
     setHelp(error.message, "error");
+    return false;
   }
 }
 
 function pause() {
   isPlaying = false;
   setStatus("Pausado", "");
+  setHelp("Pausado", "");
 }
 
 function stopPlayback(resetStatus = true) {
@@ -1020,6 +1182,7 @@ function stopPlayback(resetStatus = true) {
 
   if (resetStatus) {
     setStatus(currentBytes ? "Detenido" : "Listo", "");
+    if (currentBytes) setHelp("Detenido", "");
   }
 }
 
@@ -1125,10 +1288,94 @@ function drawSilentScope(ctx, width, height, mid, index) {
   ctx.lineTo(width, mid);
   ctx.stroke();
 
-  readouts[index].textContent = `${CHANNELS[index].name} · silencio`;
+  readouts[index].textContent = "silencio";
+}
+
+function drawReadyScope(ctx, width, height, mid, index) {
+  const visualType = CHANNELS[index].visualType;
+  const time = performance.now() / 1000;
+  const cycles = visualType === "noise" ? 28 : visualType === "sample" ? 7 : visualType === "triangle" ? 4 : 6;
+  const amp = visualType === "noise" ? height * 0.12 : visualType === "sample" ? height * 0.16 : height * 0.24;
+
+  drawScopeGrid(ctx, width, height, mid, visualType === "noise" ? 7 : 4);
+
+  ctx.lineWidth = visualType === "noise" ? 2.4 : 2.2;
+  ctx.strokeStyle = visualType === "noise" ? "rgba(224,178,255,0.68)" : "rgba(141,215,255,0.72)";
+  ctx.shadowColor = visualType === "noise" ? "rgba(215,166,255,0.18)" : "rgba(141,215,255,0.18)";
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+
+  for (let x = 0; x < width; x++) {
+    const nx = x / Math.max(1, width - 1);
+    let sample;
+
+    if (visualType === "pulse") {
+      sample = ((nx * cycles + time * 0.45 + index * 0.12) % 1) < 0.5 ? 1 : -1;
+    } else if (visualType === "triangle") {
+      const position = (nx * cycles + time * 0.32) % 1;
+      sample = 1 - 4 * Math.abs(position - 0.5);
+    } else if (visualType === "noise") {
+      sample = Math.sin((nx * cycles + time * 1.8) * Math.PI * 2) * 0.45 +
+        Math.sin((nx * 73 - time * 1.2) * Math.PI * 2) * 0.28;
+    } else {
+      sample = Math.sin((nx * cycles + time * 0.28) * Math.PI * 2) * 0.7 +
+        Math.sin((nx * cycles * 2.4 - time * 0.18) * Math.PI * 2) * 0.2;
+    }
+
+    const fade = 0.76 + Math.sin(nx * Math.PI * 2 + time) * 0.05;
+    const y = mid - sample * amp * fade;
+    if (x === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  readouts[index].textContent = "listo para Play";
+}
+
+function drawPlayerScope() {
+  if (!playerScopeCanvas || !playerScopeCtx) return;
+
+  const ctx = playerScopeCtx;
+  const width = playerScopeCanvas.width;
+  const height = playerScopeCanvas.height;
+  const mid = height / 2;
+  const time = performance.now() / 1000;
+
+  ctx.clearRect(0, 0, width, height);
+  drawScopeGrid(ctx, width, height, mid, 8);
+
+  ctx.lineWidth = 2.8;
+  ctx.strokeStyle = isPlaying ? "rgba(141,255,180,0.92)" : "rgba(141,215,255,0.78)";
+  ctx.shadowColor = isPlaying ? "rgba(141,255,180,0.24)" : "rgba(141,215,255,0.2)";
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+
+  for (let x = 0; x < width; x++) {
+    const nx = x / Math.max(1, width - 1);
+    let sample;
+
+    if (isPlaying && mixScope && mixScope.history) {
+      sample = getAnalyzerWaveSample(mixScope.history, nx, 0, mixScope.history.length);
+    } else {
+      sample =
+        Math.sin((nx * 5 + time * 0.36) * Math.PI * 2) * 0.72 +
+        Math.sin((nx * 13 - time * 0.22) * Math.PI * 2) * 0.18;
+    }
+
+    const amplitude = isPlaying ? height * 0.34 : height * 0.24;
+    const y = mid - sample * amplitude;
+    if (x === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+
+  ctx.stroke();
+  ctx.shadowBlur = 0;
 }
 
 function drawLoop() {
+  drawPlayerScope();
+
   ctxs.forEach((ctx, index) => {
     const canvas = canvases[index];
     const analyzerPack = analyzers[index];
@@ -1139,14 +1386,15 @@ function drawLoop() {
 
     ctx.clearRect(0, 0, w, h);
 
-    if (!analyzerPack) {
-      ctx.fillStyle = "rgba(255,255,255,0.55)";
-      ctx.fillText("Sin analizador", 20, mid);
+    if (!isPlaying) {
+      if (currentBytes) drawReadyScope(ctx, w, h, mid, index);
+      else drawSilentScope(ctx, w, h, mid, index);
       return;
     }
 
-    if (!isPlaying) {
-      drawSilentScope(ctx, w, h, mid, index);
+    if (!analyzerPack) {
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.fillText("Sin analizador", 20, mid);
       return;
     }
 
@@ -1237,7 +1485,7 @@ function drawLoop() {
         : "mix aprox";
 
     readouts[index].textContent =
-      `${CHANNELS[index].name} · ${muteState} · ${scopeLabel} · ${visualLabel} · ${scopeWindow.label}`;
+      `${muteState} · ${scopeLabel} · ${visualLabel} · ${scopeWindow.label}`;
   });
 
   rafId = requestAnimationFrame(drawLoop);
@@ -1337,12 +1585,18 @@ function getScopeWindow(type, zoomValue, frequency, sampleRate, bufferLength) {
   const windowMs = (windowByZoom[zoom] || 18) * typeOffset;
   const visibleSamples = Math.max(16, Math.min(bufferLength, Math.round(sampleRate * windowMs / 1000)));
   const pitchCycles = frequency > 0 ? frequency * windowMs / 1000 : zoom;
-  const cycles = Math.max(0.5, Math.min(14, pitchCycles));
+  const maxCyclesByZoom = {
+    1: 72,
+    3: 56,
+    5: 44,
+    10: 32
+  };
+  const cycles = Math.max(0.5, Math.min(maxCyclesByZoom[zoom] || 48, pitchCycles));
 
   return {
     visibleSamples,
     cycles,
-    gridLines: Math.max(2, Math.round(windowMs / 4)),
+    gridLines: Math.max(2, Math.min(12, Math.round(windowMs / 4))),
     label: `${windowMs.toFixed(windowMs >= 10 ? 0 : 1)} ms`
   };
 }
@@ -1381,7 +1635,7 @@ function estimateFrequencyFromTimeData(timeData, sampleRate) {
   const periods = [];
   for (let i = 1; i < crossings.length; i++) {
     const period = crossings[i] - crossings[i - 1];
-    if (period > 4) periods.push(period);
+    if (period > 2) periods.push(period);
   }
 
   if (!periods.length) return 0;
@@ -1532,8 +1786,8 @@ function findPeak(freqData, sampleRate, fftSize) {
 if (refreshCatalogBtn) refreshCatalogBtn.addEventListener("click", loadCatalog);
 if (loadCatalogBtn) loadCatalogBtn.addEventListener("click", () => loadFromCatalog({ autoplay: true }));
 catalogSelect.addEventListener("change", () => loadFromCatalog({ autoplay: true }));
-if (randomCatalogBtn) {
-  randomCatalogBtn.addEventListener("click", () => {
+if (randomTransportBtn) {
+  randomTransportBtn.addEventListener("click", () => {
     loadRandomCatalogTrack(catalogItems, { autoplay: true });
   });
 }
@@ -1548,14 +1802,26 @@ if (favoritesSelect) {
 if (loadUrlBtn) loadUrlBtn.addEventListener("click", loadFromUrl);
 if (fileInput) fileInput.addEventListener("change", loadFromFile);
 playBtn.addEventListener("click", play);
-pauseBtn.addEventListener("click", pause);
+if (pauseBtn) pauseBtn.addEventListener("click", pause);
 stopBtn.addEventListener("click", () => stopPlayback(true));
+if (previousBtn) previousBtn.addEventListener("click", () => playTrackOffset(-1));
+if (nextBtn) nextBtn.addEventListener("click", () => playTrackOffset(1));
 
 trackSelect.addEventListener("change", () => {
   setCurrentTrack(Number(trackSelect.value));
   updateShareUrlState();
   updateFavoriteUI();
   play();
+});
+
+trackSelect.addEventListener("keydown", event => {
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    selectTrackOffset(-1);
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    selectTrackOffset(1);
+  }
 });
 
 volume.addEventListener("input", () => {
@@ -1594,6 +1860,8 @@ window.addEventListener("error", event => {
 setMuteMode("libgme v11 pendiente hasta Play");
 updateMuteUIOnly();
 updateVolumeLabel();
+updatePlayerSummary();
+if (!rafId) rafId = requestAnimationFrame(drawLoop);
 loadCatalog();
 
 setTimeout(() => {
