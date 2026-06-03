@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-03T13:47:13.391630+00:00",
+  "updatedAt": "2026-06-03T13:47:59.379165+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -66,6 +66,17 @@
       "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/contra/Contra%20%28EMU%29.zophar.zip",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/contra/Contra%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T18:55:37.627268+00:00"
+    },
+    {
+      "filename": "doubledragon2.nsf",
+      "path": "nsf/doubledragon2.nsf",
+      "title": "Dubble Dragon 2",
+      "artist": "<?>",
+      "songs": 83,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/double-dragon-ii-the-revenge/Double%20Dragon%20II%20-%20The%20Revenge%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/double-dragon-ii-the-revenge/Double%20Dragon%20II%20-%20The%20Revenge%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-03T13:47:59.379165+00:00"
     },
     {
       "filename": "ducktales.nsf",
