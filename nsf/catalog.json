@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-03T13:46:13.938265+00:00",
+  "updatedAt": "2026-06-03T13:47:13.391630+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -33,6 +33,17 @@
       "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/castlevania/Castlevania%20%28EMU%29.zophar.zip",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/castlevania/Castlevania%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T16:08:26.221364+00:00"
+    },
+    {
+      "filename": "castlevania2.nsf",
+      "path": "nsf/castlevania2.nsf",
+      "title": "Castlevania 2",
+      "artist": "<?>",
+      "songs": 51,
+      "startSong": 5,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/castlevania-2-simons-quest/Castlevania%202%20-%20Simon%27s%20Quest%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/castlevania-2-simons-quest/Castlevania%202%20-%20Simon%27s%20Quest%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-03T13:47:13.391630+00:00"
     },
     {
       "filename": "castlevania3.nsf",
