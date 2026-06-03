@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-03T13:45:35.627934+00:00",
+  "updatedAt": "2026-06-03T13:46:13.938265+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -99,6 +99,17 @@
       "sourceUrl": "https://www.zophar.net/music/nintendo-nes-nsf/mega-man-3",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/mega-man-3/Mega%20Man%203%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T11:56:54.771481+00:00"
+    },
+    {
+      "filename": "megaman4.nsf",
+      "path": "nsf/megaman4.nsf",
+      "title": "Mega Man IV",
+      "artist": "Minae Fujii, Yasuaki Fujita",
+      "songs": 71,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/mega-man-4/Mega%20Man%204%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/mega-man-4/Mega%20Man%204%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-03T13:46:13.938265+00:00"
     },
     {
       "filename": "metroid.nsf",
