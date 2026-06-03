@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-03T13:47:59.379165+00:00",
+  "updatedAt": "2026-06-03T13:48:46.594532+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -88,6 +88,17 @@
       "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/duck-tales/Duck%20Tales%20%28EMU%29.zophar.zip",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/duck-tales/Duck%20Tales%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T18:56:05.074703+00:00"
+    },
+    {
+      "filename": "gremlins2.nsf",
+      "path": "nsf/gremlins2.nsf",
+      "title": "Gremlins 2: The New Batch",
+      "artist": "Nobuyuki Hara, About SS, Kodaka",
+      "songs": 12,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/gremlins-2-the-new-batch/Gremlins%202%20-%20The%20New%20Batch%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/gremlins-2-the-new-batch/Gremlins%202%20-%20The%20New%20Batch%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-03T13:48:46.594532+00:00"
     },
     {
       "filename": "journey-to-silius.nsf",
