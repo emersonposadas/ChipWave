@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-02T20:52:13.312803+00:00",
+  "updatedAt": "2026-06-03T12:44:17.518475+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -110,6 +110,17 @@
       "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/ninja-gaiden-[shadow-warriors]/Ninja%20Gaiden%20%20%5BShadow%20Warriors%5D%20%28EMU%29.zophar.zip",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/ninja-gaiden-[shadow-warriors]/Ninja%20Gaiden%20%20%5BShadow%20Warriors%5D%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-02T16:04:11.010441+00:00"
+    },
+    {
+      "filename": "ninja-gaiden-2.nsf",
+      "path": "nsf/ninja-gaiden-2.nsf",
+      "title": "Ninja Gaiden 2",
+      "artist": "S. Kajiya, Mayu, Miya",
+      "songs": 84,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/ninja-gaiden-ii-the-dark-sword-of-chaos/Ninja%20Gaiden%20II%20-%20The%20Dark%20Sword%20of%20Chaos%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/ninja-gaiden-ii-the-dark-sword-of-chaos/Ninja%20Gaiden%20II%20-%20The%20Dark%20Sword%20of%20Chaos%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-03T12:44:17.518475+00:00"
     },
     {
       "filename": "shatterhand.nsf",
