@@ -57,16 +57,11 @@ https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
       </div>
 
       <div class="controls transport">
-        <button id="prevTrackBtn" class="transportBtn" type="button" disabled aria-label="Track anterior">⏮ Previous</button>
-        <button id="playBtn" class="transportBtn primary" type="button" disabled>▶ Play</button>
-        <button id="stopBtn" class="transportBtn" type="button" disabled>■ Stop</button>
-        <button id="nextTrackBtn" class="transportBtn" type="button" disabled aria-label="Track siguiente">Next ⏭</button>
-
-        <div class="trackPlayer" aria-live="polite">
-          <span class="trackPlayerLabel">Track</span>
-          <strong id="trackIndicator">—</strong>
-          <select id="trackSelect" disabled aria-hidden="true" tabindex="-1"></select>
-        </div>
+        <button id="prevTrackBtn" disabled>Previous</button>
+        <button id="playBtn" disabled>Play</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <button id="nextTrackBtn" disabled>Next</button>
+        <span id="trackDisplay" class="trackLabel">Track —</span>
 
         <label class="volume">
           Volumen

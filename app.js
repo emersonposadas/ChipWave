@@ -3,12 +3,10 @@ const nsfUrlInput = document.getElementById("nsfUrl");
 const loadUrlBtn = document.getElementById("loadUrlBtn");
 const fileInput = document.getElementById("fileInput");
 const playBtn = document.getElementById("playBtn");
-const pauseBtn = document.getElementById("pauseBtn");
+const stopBtn = document.getElementById("stopBtn");
 const prevTrackBtn = document.getElementById("prevTrackBtn");
 const nextTrackBtn = document.getElementById("nextTrackBtn");
-const trackIndicator = document.getElementById("trackIndicator");
-const stopBtn = document.getElementById("stopBtn");
-const trackSelect = document.getElementById("trackSelect");
+const trackDisplay = document.getElementById("trackDisplay");
 const volume = document.getElementById("volume");
 const statusText = document.getElementById("statusText");
 const statusDot = document.getElementById("statusDot");
@@ -212,71 +210,41 @@ async function loadFromCatalog() {
   await fetchAndLoad(path);
 }
 
-function updateTrackIndicator() {
-  const count = currentInfo?.songs || 0;
-  if (!trackIndicator) return;
-  trackIndicator.textContent = count ? `${currentTrack + 1} / ${count}` : "—";
-}
-
-function updateTransportButtons() {
-  const hasTracks = !!currentBytes && !!currentInfo?.songs;
-  const count = currentInfo?.songs || 0;
-
-  if (prevTrackBtn) prevTrackBtn.disabled = !hasTracks || count < 2;
-  if (nextTrackBtn) nextTrackBtn.disabled = !hasTracks || count < 2;
-  playBtn.disabled = !hasTracks;
-  stopBtn.disabled = !hasTracks;
-  if (pauseBtn) pauseBtn.disabled = !hasTracks;
-
-  updateTrackIndicator();
-}
-
-function selectTrack(trackIndex, shouldRestart = isPlaying) {
-  const count = currentInfo?.songs || 1;
-  currentTrack = Math.max(0, Math.min(count - 1, trackIndex));
-
-  if (trackSelect) trackSelect.value = String(currentTrack);
-  updateTransportButtons();
-
-  if (shouldRestart && currentBytes) {
-    play();
-  }
-}
-
-function previousTrack() {
-  const count = currentInfo?.songs || 1;
-  if (count < 2) return;
-  selectTrack((currentTrack - 1 + count) % count, isPlaying);
-}
-
-function nextTrack() {
-  const count = currentInfo?.songs || 1;
-  if (count < 2) return;
-  selectTrack((currentTrack + 1) % count, isPlaying);
-}
-
 function updateMetadata() {
   fileNameEl.textContent = currentName;
   songTitleEl.textContent = currentInfo?.title || "—";
   artistEl.textContent = currentInfo?.artist || "—";
   songCountEl.textContent = currentInfo?.songs ? String(currentInfo.songs) : "—";
 
-  trackSelect.innerHTML = "";
   const count = currentInfo?.songs || 1;
   const start = Math.max(1, currentInfo?.startSong || 1);
 
-  for (let i = 0; i < count; i++) {
-    const option = document.createElement("option");
-    option.value = String(i);
-    option.textContent = `Track ${i + 1}`;
-    if (i === start - 1) option.selected = true;
-    trackSelect.appendChild(option);
-  }
+  currentTrack = Math.max(0, Math.min(count - 1, start - 1));
+  updateTrackDisplay();
 
-  currentTrack = Math.max(0, start - 1);
-  trackSelect.value = String(currentTrack);
-  trackSelect.disabled = false;
-  updateTransportButtons();
+  playBtn.disabled = false;
+  stopBtn.disabled = false;
+  prevTrackBtn.disabled = count <= 1;
+  nextTrackBtn.disabled = count <= 1;
+}
+
+function updateTrackDisplay() {
+  if (!trackDisplay) return;
+
+  const count = currentInfo?.songs || 1;
+  trackDisplay.textContent = `Track ${currentTrack + 1} / ${count}`;
+}
+
+async function changeTrack(direction) {
+  if (!currentInfo?.songs) return;
+
+  const count = currentInfo.songs;
+  currentTrack = (currentTrack + direction + count) % count;
+  updateTrackDisplay();
+
+  if (isPlaying) {
+    await play();
+  }
 }
 
 async function fetchAndLoad(path) {
@@ -622,7 +590,6 @@ function pause() {
 function stopPlayback(resetStatus = true) {
   isPlaying = false;
   closeGme();
-  updateTransportButtons();
 
   if (resetStatus) {
     setStatus(currentBytes ? "Detenido" : "Listo", "");
@@ -752,7 +719,7 @@ function drawLoop() {
     ctx.strokeStyle = "rgba(215,166,255,0.9)";
     ctx.beginPath();
 
-    const cycles = getVisualCycles(peak.frequency, w);
+    const cycles = Math.max(1, Math.min(60, peak.frequency / 120));
     const amp = Math.min(h * 0.34, energy * h * 1.4);
 
     for (let x = 0; x < w; x++) {
@@ -778,15 +745,6 @@ function drawLoop() {
   });
 
   rafId = requestAnimationFrame(drawLoop);
-}
-
-function getVisualCycles(frequency, width) {
-  if (!Number.isFinite(frequency) || frequency <= 0) return 1;
-
-  // Preserve the existing low/mid-frequency look, but remove the old hard cap
-  // that made high pulse/square frequencies stop looking more frequent.
-  const pixelSafeLimit = Math.max(12, Math.floor(width / 10));
-  return Math.max(1, Math.min(pixelSafeLimit, frequency / 120));
 }
 
 function findPeak(freqData, sampleRate, fftSize) {
@@ -822,14 +780,9 @@ loadCatalogBtn.addEventListener("click", loadFromCatalog);
 loadUrlBtn.addEventListener("click", loadFromUrl);
 fileInput.addEventListener("change", loadFromFile);
 playBtn.addEventListener("click", play);
-if (pauseBtn) pauseBtn.addEventListener("click", pause);
 stopBtn.addEventListener("click", () => stopPlayback(true));
-if (prevTrackBtn) prevTrackBtn.addEventListener("click", previousTrack);
-if (nextTrackBtn) nextTrackBtn.addEventListener("click", nextTrack);
-
-trackSelect.addEventListener("change", () => {
-  selectTrack(Number(trackSelect.value), isPlaying);
-});
+prevTrackBtn.addEventListener("click", () => changeTrack(-1));
+nextTrackBtn.addEventListener("click", () => changeTrack(1));
 
 volume.addEventListener("input", () => {
   if (masterGain) masterGain.gain.value = Number(volume.value);
@@ -853,7 +806,6 @@ window.addEventListener("error", event => {
 
 setMuteMode("libgme v9 pendiente hasta Play");
 updateMuteUIOnly();
-updateTransportButtons();
 loadCatalog();
 
 setTimeout(() => {
