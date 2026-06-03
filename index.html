@@ -7,181 +7,151 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="app shell">
-    <header class="topbar" aria-label="Estado de la aplicación">
-      <div class="brandBlock">
-        <p class="eyebrow">NSF visualizer</p>
-        <h1>ChipWave</h1>
-        <p class="subtitle">Escucha música NES y mira sus canales en vivo.</p>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">GitHub Pages / NSF / Real Mute</p>
+        <h1>ChipWave NSF Visualizer</h1>
+        <p class="subtitle">
+          Usa archivos NSF importados por workflow, URLs directas o archivos locales. La reproducción y visualización se procesan en tu navegador.
+        </p>
       </div>
-
-      <div class="statusCard" role="status" aria-live="polite">
-        <span id="statusDot" aria-hidden="true"></span>
-        <div>
-          <span class="statusLabel">Estado</span>
-          <strong id="statusText">Listo</strong>
-        </div>
+      <div class="meter">
+        <span id="statusDot"></span>
+        <strong id="statusText">Listo</strong>
       </div>
     </header>
 
-    <section class="workspace" aria-label="Controles y visualizadores">
-      <aside class="sidebar" aria-label="Panel de control">
-        <section class="panel primaryPanel">
-          <div class="panelHeader">
-            <div>
-              <p class="sectionKicker">Juego</p>
-              <h2>Elige música</h2>
-            </div>
-          </div>
+    <section class="panel">
+      <h2>Catálogo NSF del repo</h2>
+      <p class="hint">
+        Estos archivos viven dentro de <code>nsf/</code>. El workflow de importación los descarga y actualiza <code>nsf/catalog.json</code>.
+      </p>
 
-          <button id="randomCatalogBtn" class="randomBtn fullBtn" type="button" disabled>Random</button>
-
-          <label class="fieldLabel" for="catalogSelect">Catálogo</label>
+      <div class="controls">
+        <button id="refreshCatalogBtn">Recargar catálogo</button>
+        <label class="trackLabel">
+          Archivo
           <select id="catalogSelect">
             <option value="">No hay archivos cargados</option>
           </select>
+        </label>
+        <button id="loadCatalogBtn">Cargar seleccionado</button>
+      </div>
+    </section>
 
-          <div class="quickActions" aria-label="Compartir y favoritos">
-            <button id="favoriteBtn" class="secondaryBtn" type="button" disabled>Favorito</button>
-            <button id="shareBtn" class="secondaryBtn" type="button" disabled>Compartir</button>
-          </div>
+    <section class="panel">
+      <h2>Cargar manualmente</h2>
 
-          <label class="fieldLabel" for="favoritesSelect">Favoritos</label>
-          <select id="favoritesSelect">
-            <option value="">Sin favoritos</option>
-          </select>
-        </section>
+      <label for="nsfUrl">URL o ruta .nsf/.nsfe</label>
+      <textarea id="nsfUrl" spellcheck="false" placeholder="Ejemplos:
+nsf/demo.nsf
+https://cdn.jsdelivr.net/gh/usuario/repo@main/nsf/demo.nsf"></textarea>
 
-        <section class="panel transportPanel">
-          <div class="panelHeader">
-            <div>
-              <p class="sectionKicker">Reproducción</p>
-              <h2>Audio</h2>
-            </div>
-          </div>
+      <div class="controls">
+        <button id="loadUrlBtn">Cargar desde URL/ruta</button>
+        <label class="fileLabel">
+          Subir .nsf
+          <input id="fileInput" type="file" accept=".nsf,.nsfe,application/octet-stream" />
+        </label>
+      </div>
 
-          <div class="transport controls" aria-label="Controles de reproducción">
-            <button id="playBtn" class="playBtn" disabled type="button">Play</button>
-            <button id="pauseBtn" disabled type="button">Pausa</button>
-            <button id="stopBtn" disabled type="button">Stop</button>
-          </div>
+      <div class="controls transport">
+        <button id="prevTrackBtn" class="transportBtn" type="button" disabled aria-label="Track anterior">⏮ Previous</button>
+        <button id="playBtn" class="transportBtn primary" type="button" disabled>▶ Play</button>
+        <button id="stopBtn" class="transportBtn" type="button" disabled>■ Stop</button>
+        <button id="nextTrackBtn" class="transportBtn" type="button" disabled aria-label="Track siguiente">Next ⏭</button>
 
-          <label class="fieldLabel" for="trackSelect">Track</label>
-          <select id="trackSelect" disabled></select>
+        <div class="trackPlayer" aria-live="polite">
+          <span class="trackPlayerLabel">Track</span>
+          <strong id="trackIndicator">—</strong>
+          <select id="trackSelect" disabled aria-hidden="true" tabindex="-1"></select>
+        </div>
 
-          <label class="rangeLabel volume" for="volume">
-            <span>Volumen <output id="volumeValue" for="volume">75%</output></span>
-            <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" />
-          </label>
-        </section>
+        <label class="volume">
+          Volumen
+          <input id="volume" type="range" min="0" max="1" value="0.75" step="0.01" />
+        </label>
 
-        <section class="panel viewPanel">
-          <div class="panelHeader">
-            <div>
-              <p class="sectionKicker">Visualización</p>
-              <h2>Onda</h2>
-            </div>
-          </div>
+        <button id="unmuteAllBtn" type="button">Unmute all</button>
+      </div>
 
-          <label class="fieldLabel" for="waveCycles">Zoom temporal</label>
-          <select id="waveCycles" aria-label="Zoom temporal de la onda">
-            <option value="1">Amplio</option>
-            <option value="3" selected>Medio</option>
-            <option value="5">Cerca</option>
-            <option value="10">Detalle</option>
-          </select>
-          <label class="switch waveStatic" for="waveStatic">
-            <input id="waveStatic" type="checkbox" />
-            <span class="switchTrack" aria-hidden="true"></span>
-            <span>
-              <strong>Onda estática</strong>
-              <small>Congela la forma.</small>
-            </span>
-          </label>
+      <div class="meta">
+        <p><strong>Archivo:</strong> <span id="fileName">—</span></p>
+        <p><strong>Título NSF:</strong> <span id="songTitle">—</span></p>
+        <p><strong>Artista:</strong> <span id="artist">—</span></p>
+        <p><strong>Canciones:</strong> <span id="songCount">—</span></p>
+        <p><strong>Modo mute:</strong> <span id="muteMode">—</span></p>
+      </div>
 
-          <button id="unmuteAllBtn" class="fullBtn secondaryBtn" type="button">Activar todos los canales</button>
-        </section>
+      <p class="hint" id="helpText">
+        Para mute real, ejecuta el workflow “Build libgme for browser” y asegúrate de tener <code>vendor/libgme.js</code> y <code>vendor/libgme.wasm</code>.
+      </p>
+    </section>
 
-        <section class="panel metaPanel" aria-label="Metadata del archivo">
-          <div class="panelHeader">
-            <div>
-              <p class="sectionKicker">Archivo</p>
-              <h2>Información</h2>
-            </div>
-          </div>
-          <div class="meta">
-            <p><strong>Archivo</strong><span id="fileName">—</span></p>
-            <p><strong>Título NSF</strong><span id="songTitle">—</span></p>
-            <p><strong>Artista</strong><span id="artist">—</span></p>
-            <p><strong>Canciones</strong><span id="songCount">—</span></p>
-            <p><strong>Modo mute</strong><span id="muteMode">—</span></p>
-          </div>
-        </section>
-      </aside>
+    <section class="visualizers">
+      <article class="channel" data-channel="0">
+        <div class="channelHead">
+          <div><h2>Pulse 1</h2><span>Canal cuadrado 1</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="0" aria-pressed="false">Mute</button>
+        </div>
+        <canvas id="ch0" width="1200" height="260"></canvas>
+        <p id="readout0">—</p>
+      </article>
 
-      <section class="mainStage" aria-label="Visualizadores de onda">
-        <section class="stageIntro panel">
-          <div>
-            <p class="sectionKicker">Osciloscopio</p>
-            <h2>Canales NSF</h2>
-          </div>
-          <p class="hint" id="helpText">
-            Elige un juego o toca Random.
-          </p>
-        </section>
+      <article class="channel" data-channel="1">
+        <div class="channelHead">
+          <div><h2>Pulse 2</h2><span>Canal cuadrado 2</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="1" aria-pressed="false">Mute</button>
+        </div>
+        <canvas id="ch1" width="1200" height="260"></canvas>
+        <p id="readout1">—</p>
+      </article>
 
-        <section class="visualizers">
-          <article class="channel" data-channel="0">
-            <div class="channelHead">
-              <div><h2>Pulse 1</h2><span>Canal cuadrado 1</span></div>
-              <button class="muteBtn" type="button" data-mute-channel="0" aria-pressed="false">Mute</button>
-            </div>
-            <canvas id="ch0" width="1200" height="320"></canvas>
-            <p id="readout0">—</p>
-          </article>
+      <article class="channel" data-channel="2">
+        <div class="channelHead">
+          <div><h2>Triangle</h2><span>Bajo / melodía triangular</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="2" aria-pressed="false">Mute</button>
+        </div>
+        <canvas id="ch2" width="1200" height="260"></canvas>
+        <p id="readout2">—</p>
+      </article>
 
-          <article class="channel" data-channel="1">
-            <div class="channelHead">
-              <div><h2>Pulse 2</h2><span>Canal cuadrado 2</span></div>
-              <button class="muteBtn" type="button" data-mute-channel="1" aria-pressed="false">Mute</button>
-            </div>
-            <canvas id="ch1" width="1200" height="320"></canvas>
-            <p id="readout1">—</p>
-          </article>
+      <article class="channel" data-channel="3">
+        <div class="channelHead">
+          <div><h2>Noise</h2><span>Percusión / ruido</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="3" aria-pressed="false">Mute</button>
+        </div>
+        <canvas id="ch3" width="1200" height="260"></canvas>
+        <p id="readout3">—</p>
+      </article>
 
-          <article class="channel" data-channel="2">
-            <div class="channelHead">
-              <div><h2>Triangle</h2><span>Bajo / melodía triangular</span></div>
-              <button class="muteBtn" type="button" data-mute-channel="2" aria-pressed="false">Mute</button>
-            </div>
-            <canvas id="ch2" width="1200" height="320"></canvas>
-            <p id="readout2">—</p>
-          </article>
+      <article class="channel wide" data-channel="4">
+        <div class="channelHead">
+          <div><h2>DPCM / Mix</h2><span>Samples o mezcla final</span></div>
+          <button class="muteBtn" type="button" data-mute-channel="4" aria-pressed="false">Mute</button>
+        </div>
+        <canvas id="ch4" width="1200" height="260"></canvas>
+        <p id="readout4">—</p>
+      </article>
+    </section>
 
-          <article class="channel" data-channel="3">
-            <div class="channelHead">
-              <div><h2>Noise</h2><span>Percusión / ruido · amplitud visual reforzada</span></div>
-              <button class="muteBtn" type="button" data-mute-channel="3" aria-pressed="false">Mute</button>
-            </div>
-            <canvas id="ch3" width="1200" height="320"></canvas>
-            <p id="readout3">—</p>
-          </article>
-
-          <article class="channel wide" data-channel="4">
-            <div class="channelHead">
-              <div><h2>DPCM / Mix</h2><span>Samples o mezcla final</span></div>
-              <button class="muteBtn" type="button" data-mute-channel="4" aria-pressed="false">Mute</button>
-            </div>
-            <canvas id="ch4" width="1200" height="320"></canvas>
-            <p id="readout4">—</p>
-          </article>
-        </section>
-      </section>
+    <section class="panel notes">
+      <h2>Dónde se procesa el NSF</h2>
+      <p>
+        GitHub Actions solo descarga archivos NSF o compila el emulador. El análisis ocurre en el navegador:
+        la app hace <code>fetch()</code> del NSF, lee los bytes, parsea el header, pasa el archivo a
+        <code>Game_Music_Emu</code> y renderiza audio con Web Audio API.
+      </p>
+      <p>
+        Si <code>gme_mute_voice</code> está disponible en <code>vendor/libgme.js</code>, los botones usan mute real.
+        Si no está disponible, la app usa fallback aproximado por bandas.
+      </p>
     </section>
   </main>
 
   <script>
-    window.__chipwaveBuild = "v25-2026-06-02";
+    window.__chipwaveBuild = "v9-2026-06-02";
     window.__gmeRuntimeReady = new Promise((resolve, reject) => {
       window.__resolveGmeRuntime = resolve;
       window.__rejectGmeRuntime = reject;
@@ -206,7 +176,33 @@
       }
     };
   </script>
-  <script src="vendor/libgme.js?v=v25-2026-06-02"></script>
-  <script src="app.js?v=v25-2026-06-02"></script>
+  <script>
+    window.__chipwaveBuild = "v9-2026-06-02";
+    window.__gmeRuntimeReady = new Promise((resolve, reject) => {
+      window.__resolveGmeRuntime = resolve;
+      window.__rejectGmeRuntime = reject;
+    });
+
+    window.Module = {
+      locateFile(path) {
+        if (path.endsWith(".wasm")) return "vendor/" + path + "?v=" + window.__chipwaveBuild;
+        return path;
+      },
+      onRuntimeInitialized() {
+        window.Module.runtimeInitialized = true;
+        if (typeof window.__resolveGmeRuntime === "function") {
+          window.__resolveGmeRuntime();
+        }
+      },
+      print(text) {
+        console.log("[libgme]", text);
+      },
+      printErr(text) {
+        console.error("[libgme]", text);
+      }
+    };
+  </script>
+  <script src="vendor/libgme.js?v=v9-2026-06-02"></script>
+  <script src="app.js?v=v9-2026-06-02"></script>
 </body>
 </html>
