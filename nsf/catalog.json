@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-04T05:27:12.532634+00:00",
+  "updatedAt": "2026-06-05T15:10:57.952621+00:00",
   "items": [
     {
       "filename": "batman.nsf",
@@ -231,6 +231,17 @@
       "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/legend-of-zelda-the/Legend%20of%20Zelda%2C%20The%20%28EMU%29.zophar.zip",
       "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/legend-of-zelda-the/Legend%20of%20Zelda%2C%20The%20%28EMU%29.zophar.zip",
       "importedAt": "2026-06-03T20:22:41.418279+00:00"
+    },
+    {
+      "filename": "wizards-and-warriors.nsf",
+      "path": "nsf/wizards-and-warriors.nsf",
+      "title": "Wizards & Warriors",
+      "artist": "<?>",
+      "songs": 16,
+      "startSong": 1,
+      "sourceUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/wizards-warriors/Wizards%20%26%20Warriors%20%28EMU%29.zophar.zip",
+      "resolvedUrl": "https://fi.zophar.net/soundfiles/nintendo-nes-nsf/wizards-warriors/Wizards%20%26%20Warriors%20%28EMU%29.zophar.zip",
+      "importedAt": "2026-06-05T15:10:57.952621+00:00"
     }
   ]
 }
