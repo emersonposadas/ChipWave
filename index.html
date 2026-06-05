@@ -43,6 +43,7 @@
           <div class="quickActions" aria-label="Compartir y favoritos">
             <button id="favoriteBtn" class="secondaryBtn actionIcon favoriteIcon" type="button" disabled aria-label="Guardar favorito"></button>
             <button id="shareBtn" class="secondaryBtn actionIcon shareIcon" type="button" disabled aria-label="Compartir"></button>
+            <button id="embedBtn" class="secondaryBtn actionIcon embedIcon" type="button" disabled aria-label="Mostrar código embed"></button>
           </div>
 
           <label class="fieldLabel" for="trackSelect">Track</label>
@@ -143,6 +144,25 @@
       </section>
     </section>
   </main>
+
+  <dialog id="embedDialog" class="embedDialog" aria-labelledby="embedDialogTitle">
+    <form method="dialog" class="embedBox">
+      <div class="embedHeader">
+        <div>
+          <p class="sectionKicker">Embed</p>
+          <h2 id="embedDialogTitle">Insertar canción</h2>
+        </div>
+        <button class="iconBtn closeIcon" value="close" type="submit" aria-label="Cerrar"></button>
+      </div>
+
+      <label class="fieldLabel" for="embedCode">Código</label>
+      <textarea id="embedCode" readonly spellcheck="false"></textarea>
+
+      <div class="embedActions">
+        <button id="copyEmbedBtn" class="secondaryBtn copyBtn" type="button">Copiar</button>
+      </div>
+    </form>
+  </dialog>
 
   <script>
     window.__chipwaveBuild = "v32-2026-06-03";

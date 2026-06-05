@@ -376,7 +376,7 @@ button, .fileLabel {
 
 .quickActions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 10px;
 }
@@ -400,7 +400,8 @@ button, .fileLabel {
 }
 
 .favoriteIcon::before,
-.shareIcon::before {
+.shareIcon::before,
+.embedIcon::before {
   left: 50%;
   top: 50%;
   width: 24px;
@@ -415,7 +416,8 @@ button, .fileLabel {
 }
 
 .favoriteIcon::after,
-.shareIcon::after {
+.shareIcon::after,
+.embedIcon::after {
   display: none;
 }
 
@@ -429,6 +431,34 @@ button, .fileLabel {
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='18' cy='5' r='3'/%3E%3Ccircle cx='6' cy='12' r='3'/%3E%3Ccircle cx='18' cy='19' r='3'/%3E%3Cpath d='M8.6 10.5 15.4 6.5'/%3E%3Cpath d='M8.6 13.5 15.4 17.5'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='18' cy='5' r='3'/%3E%3Ccircle cx='6' cy='12' r='3'/%3E%3Ccircle cx='18' cy='19' r='3'/%3E%3Cpath d='M8.6 10.5 15.4 6.5'/%3E%3Cpath d='M8.6 13.5 15.4 17.5'/%3E%3C/svg%3E") center / contain no-repeat;
 }
+
+.embedIcon::before {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.35' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 8-4 4 4 4'/%3E%3Cpath d='m16 8 4 4-4 4'/%3E%3Cpath d='m14 4-4 16'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.35' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 8-4 4 4 4'/%3E%3Cpath d='m16 8 4 4-4 4'/%3E%3Cpath d='m14 4-4 16'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.closeIcon {
+  position: relative;
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+}
+
+.closeIcon::before,
+.closeIcon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 999px;
+}
+
+.closeIcon::before { transform: translate(-50%, -50%) rotate(45deg); }
+.closeIcon::after { transform: translate(-50%, -50%) rotate(-45deg); }
 
 .fullBtn { width: 100%; margin-top: 10px; }
 
@@ -465,6 +495,84 @@ textarea {
   resize: vertical;
   padding: 12px;
   line-height: 1.45;
+}
+
+.embedDialog {
+  width: min(560px, calc(100vw - 24px));
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+}
+
+.embedDialog::backdrop {
+  background: rgba(2, 5, 10, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.embedBox {
+  padding: 18px;
+  border: 1px solid rgba(141, 215, 255, 0.3);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(141, 215, 255, 0.1), transparent 42%),
+    var(--surface);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
+}
+
+.embedHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.embedHeader h2 {
+  font-size: 1.12rem;
+  margin: 0;
+}
+
+#embedCode {
+  min-height: 142px;
+  max-height: 210px;
+  color: var(--soft);
+  background: #070b13;
+  border-color: rgba(141, 215, 255, 0.28);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  resize: none;
+}
+
+#embedCode::selection {
+  color: #031019;
+  background: var(--accent);
+}
+
+.embedActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.copyBtn {
+  min-width: 112px;
+}
+
+.embedDialog[open] {
+  animation: dialogIn 0.16s ease-out;
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .transport {
@@ -637,6 +745,57 @@ code {
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 1px 5px;
+}
+
+body.embedMode {
+  min-height: auto;
+  background: var(--surface-3);
+}
+
+body.embedMode .shell {
+  width: 100%;
+  max-width: 420px;
+  padding: 0;
+}
+
+body.embedMode .topbar,
+body.embedMode .primaryPanel,
+body.embedMode .viewPanel,
+body.embedMode .mainStage,
+body.embedMode .quickActions {
+  display: none;
+}
+
+body.embedMode .workspace,
+body.embedMode .sidebar {
+  display: block;
+}
+
+body.embedMode .sidebar {
+  position: static;
+}
+
+body.embedMode .primaryPlayer {
+  min-height: 100vh;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+body.embedMode .nowPlaying {
+  min-height: 112px;
+}
+
+body.embedMode #playerScope {
+  height: 52px;
+}
+
+body.embedMode .transport {
+  gap: 7px;
+}
+
+body.embedMode .transport button {
+  min-height: 42px;
 }
 
 @media (max-width: 1120px) {

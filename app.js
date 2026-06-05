@@ -23,6 +23,10 @@ const catalogSelect = document.getElementById("catalogSelect");
 const loadCatalogBtn = document.getElementById("loadCatalogBtn");
 const favoriteBtn = document.getElementById("favoriteBtn");
 const shareBtn = document.getElementById("shareBtn");
+const embedBtn = document.getElementById("embedBtn");
+const embedDialog = document.getElementById("embedDialog");
+const embedCodeEl = document.getElementById("embedCode");
+const copyEmbedBtn = document.getElementById("copyEmbedBtn");
 const favoritesSelect = document.getElementById("favoritesSelect");
 const refreshCatalogBtn = document.getElementById("refreshCatalogBtn");
 const unmuteAllBtn = document.getElementById("unmuteAllBtn");
@@ -49,6 +53,9 @@ const CHANNELS = [
 const RANDOM_TRACK_LIMIT = 15;
 const MIX_SCOPE_VISUAL_GAIN = 1.65;
 const FAVORITES_STORAGE_KEY = "chipwave:favorites:v1";
+const EMBED_WIDTH = 380;
+const EMBED_HEIGHT = 320;
+const IS_EMBED_MODE = new URLSearchParams(window.location.search).get("embed") === "1";
 
 const VISUAL_TUNING = {
   pulse: { phaseDivisor: 260, minPhaseRate: 0.04, maxPhaseRate: 2.2, lineWidth: 2.5, glow: 8 },
@@ -93,6 +100,8 @@ let sharedAutoplayRetryCount = 0;
 let sharedAutoplayRetryTimer = 0;
 
 let gmeRuntimeReadyPromise = null;
+
+document.body.classList.toggle("embedMode", IS_EMBED_MODE);
 
 function waitForGmeRuntime() {
   if (!window.Module) {
@@ -334,7 +343,32 @@ function getShareUrl(path = catalogSelect.value, track = currentTrack) {
   url.searchParams.set("game", path);
   url.searchParams.set("track", String(Math.max(1, Number(track) + 1)));
   url.searchParams.set("autoplay", "1");
+  url.searchParams.delete("embed");
   return url.toString();
+}
+
+function getEmbedUrl(path = catalogSelect.value, track = currentTrack) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("game", path);
+  url.searchParams.set("track", String(Math.max(1, Number(track) + 1)));
+  url.searchParams.set("embed", "1");
+  url.searchParams.set("autoplay", "0");
+  return url.toString();
+}
+
+function escapeHtmlAttribute(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function getEmbedCode() {
+  const title = `${getCurrentDisplayTitle()} · Track ${currentTrack + 1}`;
+  const src = getEmbedUrl();
+
+  return `<iframe src="${escapeHtmlAttribute(src)}" title="${escapeHtmlAttribute(title)}" width="${EMBED_WIDTH}" height="${EMBED_HEIGHT}" loading="lazy" style="border:0;border-radius:8px;max-width:100%;" allow="autoplay"></iframe>`;
 }
 
 function getSharedRequest() {
@@ -363,6 +397,10 @@ function updateFavoriteUI() {
 
   if (shareBtn) {
     shareBtn.disabled = !catalogSelect.value || !currentBytes;
+  }
+
+  if (embedBtn) {
+    embedBtn.disabled = !catalogSelect.value || !currentBytes;
   }
 
   if (!favoritesSelect) return;
@@ -447,6 +485,46 @@ async function shareCurrentTrack() {
   } catch (error) {
     console.warn("No se pudo compartir automáticamente:", error);
     window.prompt("Copia este link:", url);
+  }
+}
+
+function selectEmbedCode() {
+  if (!embedCodeEl) return;
+
+  embedCodeEl.focus();
+  embedCodeEl.select();
+}
+
+function openEmbedDialog() {
+  if (!catalogSelect.value || !currentBytes) return;
+
+  if (embedCodeEl) embedCodeEl.value = getEmbedCode();
+
+  if (embedDialog && typeof embedDialog.showModal === "function") {
+    embedDialog.showModal();
+  } else if (embedDialog) {
+    embedDialog.setAttribute("open", "");
+  }
+
+  window.setTimeout(selectEmbedCode, 40);
+  setHelp("Código embed listo.", "ok");
+}
+
+async function copyCurrentEmbed() {
+  if (!catalogSelect.value || !currentBytes) return;
+
+  const embedCode = embedCodeEl && embedCodeEl.value ? embedCodeEl.value : getEmbedCode();
+
+  try {
+    await navigator.clipboard.writeText(embedCode);
+    setHelp("Código embed copiado.", "ok");
+    if (copyEmbedBtn) copyEmbedBtn.textContent = "Copiado";
+    window.setTimeout(() => {
+      if (copyEmbedBtn) copyEmbedBtn.textContent = "Copiar";
+    }, 1400);
+  } catch (error) {
+    console.warn("No se pudo copiar el embed automáticamente:", error);
+    window.prompt("Copia este código embed:", embedCode);
   }
 }
 
@@ -1793,6 +1871,19 @@ if (randomTransportBtn) {
 }
 if (favoriteBtn) favoriteBtn.addEventListener("click", toggleFavorite);
 if (shareBtn) shareBtn.addEventListener("click", shareCurrentTrack);
+if (embedBtn) embedBtn.addEventListener("click", openEmbedDialog);
+if (copyEmbedBtn) copyEmbedBtn.addEventListener("click", copyCurrentEmbed);
+if (embedCodeEl) embedCodeEl.addEventListener("focus", selectEmbedCode);
+if (embedDialog) {
+  embedDialog.addEventListener("click", event => {
+    if (event.target !== embedDialog) return;
+    if (typeof embedDialog.close === "function") {
+      embedDialog.close();
+    } else {
+      embedDialog.removeAttribute("open");
+    }
+  });
+}
 if (favoritesSelect) {
   favoritesSelect.addEventListener("change", () => {
     if (favoritesSelect.value) loadFavoriteByKey(favoritesSelect.value);
