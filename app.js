@@ -37,6 +37,7 @@ const playerTrackEl = document.getElementById("playerTrack");
 const playerContextEl = document.querySelector(".playerContext");
 const playerScopeCanvas = document.getElementById("playerScope");
 const playerScopeCtx = playerScopeCanvas ? playerScopeCanvas.getContext("2d") : null;
+const openPlayerLink = document.getElementById("openPlayerLink");
 
 const canvases = ["ch0", "ch1", "ch2", "ch3", "ch4"].map(id => document.getElementById(id));
 const ctxs = canvases.map(c => c.getContext("2d"));
@@ -54,7 +55,7 @@ const RANDOM_TRACK_LIMIT = 15;
 const MIX_SCOPE_VISUAL_GAIN = 1.65;
 const FAVORITES_STORAGE_KEY = "chipwave:favorites:v1";
 const EMBED_WIDTH = 380;
-const EMBED_HEIGHT = 320;
+const EMBED_HEIGHT = 342;
 const IS_EMBED_MODE = new URLSearchParams(window.location.search).get("embed") === "1";
 
 const VISUAL_TUNING = {
@@ -347,6 +348,16 @@ function getShareUrl(path = catalogSelect.value, track = currentTrack) {
   return url.toString();
 }
 
+function getPlayerUrl(path = catalogSelect.value, track = currentTrack) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("game", path);
+  url.searchParams.set("track", String(Math.max(1, Number(track) + 1)));
+  url.searchParams.delete("embed");
+  url.searchParams.delete("autoplay");
+  url.searchParams.delete("play");
+  return url.toString();
+}
+
 function getEmbedUrl(path = catalogSelect.value, track = currentTrack) {
   const url = new URL(window.location.href);
   url.searchParams.set("game", path);
@@ -401,6 +412,10 @@ function updateFavoriteUI() {
 
   if (embedBtn) {
     embedBtn.disabled = !catalogSelect.value || !currentBytes;
+  }
+
+  if (openPlayerLink) {
+    openPlayerLink.href = catalogSelect.value && currentBytes ? getPlayerUrl() : "./";
   }
 
   if (!favoritesSelect) return;

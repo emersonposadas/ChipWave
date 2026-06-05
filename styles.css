@@ -462,6 +462,10 @@ button, .fileLabel {
 
 .fullBtn { width: 100%; margin-top: 10px; }
 
+.embedOpenLink {
+  display: none;
+}
+
 button:hover, .fileLabel:hover, select:hover, textarea:hover { border-color: var(--line-strong); }
 button:focus-visible, .fileLabel:focus-within, select:focus, textarea:focus, input[type="range"]:focus-visible, .switch:focus-within {
   border-color: var(--accent);
@@ -796,6 +800,34 @@ body.embedMode .transport {
 
 body.embedMode .transport button {
   min-height: 42px;
+}
+
+body.embedMode .embedOpenLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  justify-self: end;
+  min-height: 24px;
+  margin-top: 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+body.embedMode .embedOpenLink:hover,
+body.embedMode .embedOpenLink:focus-visible {
+  border-color: rgba(141, 215, 255, 0.28);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(141, 215, 255, 0.12);
 }
 
 @media (max-width: 1120px) {
